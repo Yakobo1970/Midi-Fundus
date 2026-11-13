@@ -1,0 +1,7 @@
+build/
+dist_installer/
+shots/
+.vs/
+__pycache__/
+*.wav
+build_config.log
