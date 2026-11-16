@@ -247,6 +247,9 @@ public:
             ed.refreshNow();
             if (int i = args.indexOf ("select"); i > 0) ed.tableView().list().selectRow (args[i + 1].getIntValue());
             if (args.contains ("about")) ed.showAbout (true);
+            if (int i = args.indexOf ("protect"); i > 0 && args[i + 1].getIntValue() < arch.folders.size()) { arch.setProtected (arch.folders[args[i + 1].getIntValue()], true); ed.refreshNow(); }
+            if (args.contains ("manage")) ed.scanAddedFolders ({}, true);
+            if (args.contains ("folderpick") && arch.folders.size() > 0) ed.scanAddedFolders ({ arch.folders[arch.folders.size() - 1] });   // picker only, scan starts on click
             if (args.contains ("edit")) ed.tableView().startEdit (ed.tableView().list().getSelectedRow(), ma::cTitle);
             if (args.contains ("keys"))   // cell navigation without writing anything (Return on an unchanged value writes nothing)
             {

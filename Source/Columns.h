@@ -2,6 +2,7 @@
 #pragma once
 #include "Archive.h"
 #include "Lang.h"
+#include "Formats.h"
 
 namespace ma
 {
@@ -108,7 +109,7 @@ inline juce::String cellText (const Entry& e, int col)
         case cDup: return dupText (e);
         case cComment: return e.has (fError) ? T ("FEHLER: %1", TS (e.error)) : e.comment;
         case cSize: return juce::String (e.size);
-        case cFormat: return e.has (fRmi) ? "RMI" : juce::String (e.format);
+        case cFormat: return e.has (fConverted) ? formatNameForFile (e.name) : e.has (fRmi) ? "RMI" : juce::String (e.format);
         case cKeyMeta: return localKey (e.keyMeta);
         case cCrc: return juce::String::toHexString ((int) e.crc).paddedLeft ('0', 8).toUpperCase();
         case cFolder: return e.folder;
@@ -134,7 +135,7 @@ inline double cellNumber (const Entry& e, int col)
         case cProfile: return e.notes;
         case cDup: return e.group == 0 ? 1e12 : (double) e.group * 10.0 - e.dupKind - e.bestScore;
         case cSize: return (double) e.size;
-        case cFormat: return e.has (fRmi) ? 9 : e.format;
+        case cFormat: return e.has (fConverted) ? 10 + (int) (formatNameForFile (e.name).hashCode() & 0xFF) : e.has (fRmi) ? 9 : e.format;
         case cModified: return (double) e.mtime;
         default: return 0;
     }

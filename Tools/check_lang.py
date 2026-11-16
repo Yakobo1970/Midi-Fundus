@@ -17,7 +17,7 @@ def used_keys():
         keys += [name, tip]
     s = open(os.path.join(src, 'WebLookup.h'), encoding='utf-8').read()
     keys += re.findall(STR, s.split('kEngineNames[] =')[1].split(';')[0])
-    keys += ['Datei nicht lesbar', 'MIDI-Kopf beschädigt']   # stored error texts (TS)
+    keys += ['Datei nicht lesbar', 'MIDI-Kopf beschädigt', 'UltraStar-Datei ohne Noten oder Tempo']   # stored error texts (TS)
     out = []
     for k in keys:
         if k not in out:

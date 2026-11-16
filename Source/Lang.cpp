@@ -57,11 +57,15 @@ struct Row { const char* de; const char* en; const char* fr; };
 
 const char* const kAboutDe =
     "WAS MACHT DIESES PROGRAMM?\n"
-    "Midi-Fundus durchsucht beliebige Ordner samt Unterordnern nach MIDI-Dateien (.mid, .midi, .kar, .rmi) und listet alles Wissenswerte in einer "
+    "Midi-Fundus durchsucht beliebige Ordner samt Unterordnern nach MIDI-Dateien (.mid, .midi, .kar, .rmi) und vielen verwandten Formaten (siehe „Weitere Formate“) und listet alles Wissenswerte in einer "
     "großen Tabelle: Titel, Interpret, Komponist, Genre, Jahr, Copyright, Sprache, Tonart und Skala, Tempo, Takt, Dauer, Spuren, Kanäle, "
     "Notenanzahl, Instrumente, Liedtext, Bewertung und Favoriten. Schon beim Einlesen sucht es Dubletten – nicht am Dateinamen, sondern an den Noten.\n\n"
     "KURZANLEITUNG\n"
-    "1. „Ordner“ → „Ordner hinzufügen …“ oder Ordner einfach ins Fenster ziehen. Danach „Einlesen“. Bereits bekannte, unveränderte Dateien werden übersprungen; "
+    "1. „Ordner“ → „Ordner hinzufügen …“ oder Ordner einfach ins Fenster ziehen. Ein neuer Ordner wird sofort eingelesen; gibt es schon andere Ordner, fragt ein Fenster, welche davon mitgelesen werden sollen. "
+    "Im selben Fenster (auch über „Ordner“ → „Ordner verwalten …“) lassen sich Ordner schreibschützen: dort ändert, verschiebt und löscht "
+    "Midi-Fundus nichts, ihre Dateien erscheinen rötlich. Ein Ordner verlässt den Fundus über sein Untermenü „Aus dem Fundus entfernen“ – "
+    "samt Einträgen, die Dateien bleiben. "
+    "„Einlesen“ liest alle Ordner. Bereits bekannte, unveränderte Dateien werden übersprungen; "
     "die Datenbank liegt in %APPDATA%\\MIDIARCHIV und wird von Standalone und Plugin gemeinsam benutzt.\n"
     "2. Spaltenkopf anklicken = sortieren, nochmal = umgekehrt. Spaltenkopf festhalten und ziehen = Spalte verschieben, Rand ziehen = Breite. "
     "Rechtsklick auf den Spaltenkopf blendet Spalten ein und aus. Anordnung und Breiten bleiben gespeichert.\n"
@@ -84,7 +88,20 @@ const char* const kAboutDe =
     "WAS IN DIE DATEI GESCHRIEBEN WIRD\n"
     "Titel (zusätzlich als Sequenzname), Copyright (Copyright-Eintrag), Tonart (Key Signature) sowie Interpret, Komponist, Genre, Jahr, Sprache und "
     "Kommentar als Text-Einträge „Artist: …“, „Composer: …“ usw. am Anfang der ersten Spur – lesbar für jedes Programm, das MIDI-Texte anzeigt. "
-    "Bewertung und Favorit stehen nur in der Datenbank.\n\n"
+    "Bewertung und Favorit stehen nur in der Datenbank.\n"
+    "UltraStar-Songs (Formatspalte „UltraStar“): Titel, Interpret, Genre, Jahr, Sprache und Kommentar landen in den Kopfzeilen (#TITLE:, #ARTIST: …), "
+    "Kodierung und Noten bleiben unverändert; Komponist, Copyright und Tonart kennt das Format nicht. Beim Ziehen in die DAW wird daraus eine MIDI-Datei "
+    "mit Gesangsmelodie und Liedtext; Rechtsklick → Datei → „Konvertieren nach“ legt sie dauerhaft ab. Kopieren, Verschieben und Löschen "
+    "betreffen nur die .txt – Audio, Cover und Video im Song-Ordner bleiben, wo sie sind.\n\n"
+    "WEITERE FORMATE\n"
+    "Neben MIDI liest Midi-Fundus: UltraStar (.txt) · Spiele und Retro: XMI (Miles Sound System), MUS (Doom/DMX), HMP (HMI), CMF (Creative), "
+    "MMF (Yamaha SMAF, Handyphone-Klingeltöne) · Sequenzer und DAWs: WRK (Cakewalk), FLP (FL Studio), ALS (Ableton Live 11/12), "
+    "SONG (Studio One / Fender Studio Pro), DAWPROJECT (Bitwig, Studio One, Cubase 14+), RPP (REAPER), Reason (.reason .rps .rns – nur Tempo, Taktart, Länge und Version, weil Reason die Noten "
+    "verschlüsselt speichert) · Noten: MusicXML (.musicxml .xml .mxl), MuseScore (.mscz .mscx), ABC (.abc), Humdrum (.krn). "
+    "Alle werden intern in MIDI umgewandelt: Tonart, Dubletten, Vorhören und Ziehen in die DAW funktionieren wie bei MIDI. "
+    "Diese Formate sind schreibgeschützt (außer UltraStar). Rechtsklick → Datei → „Konvertieren nach“ speichert jede Datei als "
+    "MIDI (für jede DAW), MusicXML (für Notenprogramme, quantisiert auf Sechzehntel und Triolen), ABC (eine Melodie je Spur), DAWproject (Projekt für Bitwig 5+, Studio One 6.5+ / Fender Studio Pro, Cubase 14+) "
+    "oder REAPER-Projekt – Instrumente weist du danach in der DAW zu.\n\n"
     "SPRACHE\n"
     "Deutsch, English, Français – Auswahl im Setup oder jederzeit unter Einstellungen → „Sprache · Language · Langue“.\n\n"
     "LINKS\n"
@@ -103,11 +120,15 @@ const char* const kAboutDe =
 
 const char* const kAboutEn =
     "WHAT DOES THIS PROGRAM DO?\n"
-    "Midi-Fundus searches any folders including their subfolders for MIDI files (.mid, .midi, .kar, .rmi) and lists everything worth knowing in one "
+    "Midi-Fundus searches any folders including their subfolders for MIDI files (.mid, .midi, .kar, .rmi) and many related formats (see “More formats”) and lists everything worth knowing in one "
     "large table: title, artist, composer, genre, year, copyright, language, key and scale, tempo, time signature, duration, tracks, channels, "
     "number of notes, instruments, lyrics, rating and favourites. It finds duplicates while scanning – not by file name but by the notes.\n\n"
     "QUICK START\n"
-    "1. “Folders” → “Add folder …” or simply drag folders into the window. Then “Scan”. Known, unchanged files are skipped; "
+    "1. “Folders” → “Add folder …” or simply drag folders into the window. A new folder is scanned right away; if there are other folders already, a window asks which of them to include. "
+    "The same window (also via “Folders” → “Manage folders …”) makes folders write-protected: Midi-Fundus does not change, "
+    "move or delete anything there, and their files appear reddish. A folder leaves the archive via its sub menu “Remove from the archive” – "
+    "with its entries, the files stay. "
+    "“Scan” reads all folders. Known, unchanged files are skipped; "
     "the database lives in %APPDATA%\\MIDIARCHIV and is shared by the standalone program and the plug-in.\n"
     "2. Click a column header = sort, click again = reverse. Hold and drag a header = move the column, drag its edge = width. "
     "Right-click the header to show or hide columns. Order and widths are remembered.\n"
@@ -129,7 +150,20 @@ const char* const kAboutEn =
     "WHAT IS WRITTEN INTO THE FILE\n"
     "Title (also as sequence name), copyright (copyright event), key (key signature) as well as artist, composer, genre, year, language and "
     "comment as text events “Artist: …”, “Composer: …” etc. at the start of the first track – readable by every program that shows MIDI texts. "
-    "Rating and favourite are stored in the database only.\n\n"
+    "Rating and favourite are stored in the database only.\n"
+    "UltraStar songs (format column “UltraStar”): title, artist, genre, year, language and comment go into the header lines (#TITLE:, #ARTIST: …), "
+    "encoding and notes stay unchanged; the format has no composer, copyright or key. Dragged into a DAW, the song becomes a MIDI file with the vocal "
+    "melody and lyrics; right-click → File → “Convert to” stores it permanently. Copy, move and delete only affect the .txt – audio, cover "
+    "and video in the song folder stay where they are.\n\n"
+    "MORE FORMATS\n"
+    "Besides MIDI, Midi-Fundus reads: UltraStar (.txt) · games and retro: XMI (Miles Sound System), MUS (Doom/DMX), HMP (HMI), CMF (Creative), "
+    "MMF (Yamaha SMAF, Handyphone ring tones) · sequencers and DAWs: WRK (Cakewalk), FLP (FL Studio), ALS (Ableton Live 11/12), "
+    "SONG (Studio One / Fender Studio Pro), DAWPROJECT (Bitwig, Studio One, Cubase 14+), RPP (REAPER), Reason (.reason .rps .rns – only tempo, metre, length and version, because Reason stores "
+    "the notes encrypted) · notation: MusicXML (.musicxml .xml .mxl), MuseScore (.mscz .mscx), ABC (.abc), Humdrum (.krn). "
+    "All of them are converted to MIDI internally: key, duplicates, preview and dragging into the DAW work as with MIDI. "
+    "These formats are read-only (except UltraStar). Right-click → File → “Convert to” saves any file as MIDI (for every DAW), "
+    "MusicXML (for notation programs, quantised to sixteenths and triplets), ABC (one melody per track), DAWproject (project for Bitwig 5+, Studio One 6.5+ / Fender Studio Pro, Cubase 14+) "
+    "or a REAPER project – assign the instruments in the DAW afterwards.\n\n"
     "LANGUAGE\n"
     "Deutsch, English, Français – chosen in the setup or any time under Settings → “Sprache · Language · Langue”.\n\n"
     "LINKS\n"
@@ -148,12 +182,16 @@ const char* const kAboutEn =
 
 const char* const kAboutFr =
     "QUE FAIT CE PROGRAMME ?\n"
-    "Midi-Fundus parcourt les dossiers de votre choix, sous-dossiers compris, à la recherche de fichiers MIDI (.mid, .midi, .kar, .rmi) et affiche "
+    "Midi-Fundus parcourt les dossiers de votre choix, sous-dossiers compris, à la recherche de fichiers MIDI (.mid, .midi, .kar, .rmi) et de nombreux formats apparentés (voir « Autres formats ») et affiche "
     "tout ce qu'il faut savoir dans un grand tableau : titre, interprète, compositeur, genre, année, copyright, langue, tonalité et gamme, tempo, "
     "mesure, durée, pistes, canaux, nombre de notes, instruments, paroles, note et favoris. Dès l'analyse, il cherche les doublons – non pas d'après "
     "le nom du fichier, mais d'après les notes.\n\n"
     "PRISE EN MAIN\n"
-    "1. « Dossiers » → « Ajouter un dossier … » ou glisser simplement des dossiers dans la fenêtre. Puis « Analyser ». Les fichiers déjà connus et "
+    "1. « Dossiers » → « Ajouter un dossier … » ou glisser simplement des dossiers dans la fenêtre. Un nouveau dossier est analysé aussitôt ; s'il existe déjà d'autres dossiers, une fenêtre demande lesquels inclure. "
+    "La même fenêtre (aussi via « Dossiers » → « Gérer les dossiers … ») protège des dossiers en écriture : Midi-Fundus n'y modifie, "
+    "ne déplace et ne supprime rien, et leurs fichiers apparaissent en rouge. Un dossier quitte l'archive via son sous-menu « Retirer de l'archive » – "
+    "avec ses entrées, les fichiers restent. "
+    "« Analyser » lit tous les dossiers. Les fichiers déjà connus et "
     "inchangés sont ignorés ; la base de données se trouve dans %APPDATA%\\MIDIARCHIV et est partagée par le programme autonome et le plug-in.\n"
     "2. Clic sur un en-tête de colonne = trier, nouveau clic = ordre inverse. Maintenir et glisser l'en-tête = déplacer la colonne, glisser le bord = "
     "largeur. Clic droit sur l'en-tête pour afficher ou masquer des colonnes. Ordre et largeurs sont mémorisés.\n"
@@ -176,7 +214,20 @@ const char* const kAboutFr =
     "CE QUI EST ÉCRIT DANS LE FICHIER\n"
     "Titre (aussi comme nom de séquence), copyright (événement copyright), tonalité (key signature) ainsi qu'interprète, compositeur, genre, année, "
     "langue et commentaire sous forme d'événements texte « Artist: … », « Composer: … » etc. au début de la première piste – lisibles par tout "
-    "programme qui affiche les textes MIDI. La note et les favoris restent uniquement dans la base de données.\n\n"
+    "programme qui affiche les textes MIDI. La note et les favoris restent uniquement dans la base de données.\n"
+    "Chansons UltraStar (colonne format « UltraStar ») : titre, interprète, genre, année, langue et commentaire sont écrits dans les lignes d'en-tête "
+    "(#TITLE:, #ARTIST: …), l'encodage et les notes restent inchangés ; le format ne connaît ni compositeur, ni copyright, ni tonalité. Glissée dans "
+    "le DAW, la chanson devient un fichier MIDI avec la mélodie chantée et les paroles ; clic droit → Fichier → « Convertir en » "
+    "la conserve. Copier, déplacer et supprimer ne concernent que le .txt – audio, pochette et vidéo restent dans le dossier de la chanson.\n\n"
+    "AUTRES FORMATS\n"
+    "Outre le MIDI, Midi-Fundus lit : UltraStar (.txt) · jeux et rétro : XMI (Miles Sound System), MUS (Doom/DMX), HMP (HMI), CMF (Creative), "
+    "MMF (Yamaha SMAF, sonneries Handyphone) · séquenceurs et STAN : WRK (Cakewalk), FLP (FL Studio), ALS (Ableton Live 11/12), "
+    "SONG (Studio One / Fender Studio Pro), DAWPROJECT (Bitwig, Studio One, Cubase 14+), RPP (REAPER), Reason (.reason .rps .rns – seulement tempo, mesure, durée et version, car Reason chiffre "
+    "les notes) · partitions : MusicXML (.musicxml .xml .mxl), MuseScore (.mscz .mscx), ABC (.abc), Humdrum (.krn). "
+    "Tous sont convertis en MIDI en interne : tonalité, doublons, écoute et glisser dans le DAW fonctionnent comme pour le MIDI. "
+    "Ces formats sont en lecture seule (sauf UltraStar). Clic droit → Fichier → « Convertir en » enregistre chaque fichier en "
+    "MIDI (pour tout DAW), MusicXML (pour les logiciels de partition, quantifié en doubles croches et triolets), ABC (une mélodie par piste), DAWproject (projet pour Bitwig 5+, Studio One 6.5+ / Fender Studio Pro, Cubase 14+) "
+    "ou projet REAPER – les instruments s'attribuent ensuite dans le DAW.\n\n"
     "LANGUE\n"
     "Deutsch, English, Français – choix dans l'installation ou à tout moment sous Paramètres → « Sprache · Language · Langue ».\n\n"
     "LIENS\n"
@@ -288,6 +339,64 @@ const Row kRows[] = {
     { "Suche MIDI-Dateien … %1 gefunden", "Looking for MIDI files … %1 found", "Recherche de fichiers MIDI … %1 trouvés" },
     { "Lese ein: %1 / %2  (%3)", "Scanning: %1 / %2  (%3)", "Analyse : %1 / %2  (%3)" },
     { "Datei nicht lesbar", "File not readable", "Fichier illisible" },
+    { "Entfernen", "Remove", "Retirer" },
+    { "%1 Einträge aus dem Fundus entfernt", "%1 entries removed from the archive", "%1 entrées retirées de l'archive" },
+    { "Aus dem Fundus entfernen (Ordner und Einträge) …", "Remove from the archive (folder and entries) …", "Retirer de l'archive (dossier et entrées) …" },
+    { "%1 Einträge ohne Ordner entfernen …", "Remove %1 entries without a folder …", "Retirer %1 entrées sans dossier …" },
+    { "Einträge ohne Ordner entfernen?", "Remove entries without a folder?", "Retirer les entrées sans dossier ?" },
+    { "%1 Einträge gehören zu keinem Ordner im Fundus mehr. Sie werden aus der Datenbank entfernt (mit Bewertung und Favorit); die Dateien selbst bleiben unangetastet.", "%1 entries no longer belong to any folder of the archive. They are removed from the database (with rating and favourite); the files themselves stay untouched.", "%1 entrées n'appartiennent plus à aucun dossier de l'archive. Elles sont retirées de la base de données (avec note et favori) ; les fichiers eux-mêmes restent intacts." },
+    { "Ordner aus dem Fundus entfernen?", "Remove the folder from the archive?", "Retirer le dossier de l'archive ?" },
+    { "„%1“ und seine %2 Einträge werden aus der Datenbank entfernt (mit Bewertung und Favorit). Die Dateien selbst bleiben unangetastet. Ein laufender Scan wird dafür angehalten.", "“%1” and its %2 entries are removed from the database (with rating and favourite). The files themselves stay untouched. A running scan is stopped for this.", "« %1 » et ses %2 entrées sont retirés de la base de données (avec note et favori). Les fichiers eux-mêmes restent intacts. Une analyse en cours est arrêtée pour cela." },
+    { "Schreibgeschützter Ordner – Midi-Fundus ändert, verschiebt und löscht hier nichts (Ordner → Ordner verwalten …)", "Write-protected folder – Midi-Fundus does not change, move or delete anything here (Folders → Manage folders …)", "Dossier protégé en écriture – Midi-Fundus n'y modifie, ne déplace et ne supprime rien (Dossiers → Gérer les dossiers …)" },
+    { "schreibgeschützt", "write-protected", "protégé en écriture" },
+    { "Midi-Fundus schreibt, verschiebt und löscht in diesem Ordner nichts (Dateien erscheinen rötlich)", "Midi-Fundus does not write, move or delete anything in this folder (files appear reddish)", "Midi-Fundus n'écrit, ne déplace et ne supprime rien dans ce dossier (les fichiers apparaissent en rouge)" },
+    { "Alle Ordner einlesen", "Scan all folders", "Analyser tous les dossiers" },
+    { "Keinen Ordner einlesen", "Scan no folder", "N'analyser aucun dossier" },
+    { "Ordner einlesen und schützen", "Scan and protect folders", "Analyser et protéger les dossiers" },
+    { "Links: welche Ordner jetzt eingelesen werden (neue sind angehakt, nicht angehakte bleiben, wie sie sind). Rechts: schreibgeschützte Ordner – dort ändert, verschiebt und löscht Midi-Fundus nichts.", "Left: which folders to scan now (new ones are ticked, unticked folders stay as they are). Right: write-protected folders – Midi-Fundus does not change, move or delete anything there.", "À gauche : les dossiers à analyser maintenant (les nouveaux sont cochés, les autres restent tels quels). À droite : dossiers protégés en écriture – Midi-Fundus n'y modifie, ne déplace et ne supprime rien." },
+    { "Schreibschutz", "Write protection", "Protection en écriture" },
+    { "Ordner verwalten (einlesen, Schreibschutz) …", "Manage folders (scan, write protection) …", "Gérer les dossiers (analyse, protection en écriture) …" },
+    { "Schreibgeschützt", "Write-protected", "Protégé en écriture" },
+    { "(schreibgeschützt)", "(write-protected)", "(protégé en écriture)" },
+    { "%1 Datei(en) in schreibgeschützten Ordnern bleiben unangetastet", "%1 file(s) in write-protected folders are left untouched", "%1 fichier(s) dans des dossiers protégés restent intacts" },
+    { "%1 (schreibgeschützter Ordner)", "%1 (write-protected folder)", "%1 (dossier protégé en écriture)" },
+    { "(neu)", "(new)", "(nouveau)" },
+    { "(%1 Dateien im Archiv)", "(%1 files in the archive)", "(%1 fichiers dans l'archive)" },
+    { "Alle", "All", "Tous" },
+    { "Keine", "None", "Aucun" },
+    { "Ordner hinzugefügt – „Einlesen“, sobald der laufende Scan fertig ist", "Folder added – click “Scan” once the running scan has finished", "Dossier ajouté – « Analyser » dès que l'analyse en cours est terminée" },
+    { "Keine DAWproject-Datei", "Not a DAWproject file", "Pas un fichier DAWproject" },
+    { "Keine REAPER-Projektdatei", "Not a REAPER project file", "Pas un fichier de projet REAPER" },
+    { "DAWproject (.dawproject) – Projekt mit Spuren, Tempo und Markern: Bitwig 5+, Studio One 6.5+ / Fender Studio Pro, Cubase 14+", "DAWproject (.dawproject) – project with tracks, tempo and markers: Bitwig 5+, Studio One 6.5+ / Fender Studio Pro, Cubase 14+", "DAWproject (.dawproject) – projet avec pistes, tempo et marqueurs : Bitwig 5+, Studio One 6.5+ / Fender Studio Pro, Cubase 14+" },
+    { "REAPER-Projekt (.rpp) – eine MIDI-Spur je Instrument", "REAPER project (.rpp) – one MIDI track per instrument", "Projet REAPER (.rpp) – une piste MIDI par instrument" },
+    { "Reason speichert die Noten verschlüsselt – nur Tempo, Taktart und Länge sind lesbar. In Reason: Datei → „MIDI-Datei exportieren …“ (bei .rps gesperrt).", "Reason stores the notes encrypted – only tempo, metre and length are readable. In Reason: File → “Export MIDI File …” (locked for .rps).", "Reason chiffre les notes – seuls le tempo, la mesure et la durée sont lisibles. Dans Reason : Fichier → « Exporter un fichier MIDI … » (verrouillé pour .rps)." },
+    { "Noten verschlüsselt", "Notes encrypted", "Notes chiffrées" },
+    { "MIDI-Daten nicht lesbar", "MIDI data not readable", "Données MIDI illisibles" },
+    { "Schlagzeug", "Drums", "Batterie" },
+    { "Spur %1", "Track %1", "Piste %1" },
+    { "Keine Noten gefunden", "No notes found", "Aucune note trouvée" },
+    { "Unbekanntes Archivformat", "Unknown archive format", "Format d'archive inconnu" },
+    { "Kein Ableton-Live-Set", "Not an Ableton Live Set", "Pas un Live Set Ableton" },
+    { "Song-Datei beschädigt", "Song file damaged", "Fichier de morceau endommagé" },
+    { "Keine Noten gefunden (nur Audio?)", "No notes found (audio only?)", "Aucune note trouvée (audio seulement ?)" },
+    { "XMI ohne Ereignisdaten (EVNT)", "XMI without event data (EVNT)", "XMI sans données d'événements (EVNT)" },
+    { "Kein MusicXML", "Not MusicXML", "Pas du MusicXML" },
+    { "Keine MuseScore-Datei", "Not a MuseScore file", "Pas un fichier MuseScore" },
+    { "%1 Stücke in der Datei, gelesen: das erste", "%1 tunes in the file, read: the first", "%1 morceaux dans le fichier, lu : le premier" },
+    { "SMAF „Mobile Standard“ (MA-3/MA-5) wird nicht unterstützt", "SMAF “Mobile Standard” (MA-3/MA-5) is not supported", "SMAF « Mobile Standard » (MA-3/MA-5) n'est pas pris en charge" },
+    { "Dieses Format kann Midi-Fundus nur lesen – „Konvertieren nach“ erzeugt eine bearbeitbare MIDI-Datei", "Midi-Fundus can only read this format – “Convert to” creates an editable MIDI file", "Midi-Fundus ne peut que lire ce format – « Convertir en » crée un fichier MIDI modifiable" },
+    { "%1 markierte Dateien konvertieren", "Convert %1 selected files", "Convertir %1 fichiers sélectionnés" },
+    { "Datei konvertieren", "Convert file", "Convertir le fichier" },
+    { "MIDI-Datei (.mid) – für jede DAW: Ableton Live, Studio One / Fender Studio Pro, Reason, FL Studio, Cubase …", "MIDI file (.mid) – for every DAW: Ableton Live, Studio One / Fender Studio Pro, Reason, FL Studio, Cubase …", "Fichier MIDI (.mid) – pour tout DAW : Ableton Live, Studio One / Fender Studio Pro, Reason, FL Studio, Cubase …" },
+    { "MusicXML (.musicxml) – für Notenprogramme: MuseScore 3 und neuer, Finale, Sibelius, Dorico …", "MusicXML (.musicxml) – for notation programs: MuseScore 3 and later, Finale, Sibelius, Dorico …", "MusicXML (.musicxml) – pour les logiciels de partition : MuseScore 3 et suivants, Finale, Sibelius, Dorico …" },
+    { "ABC-Notation (.abc) – Melodie je Spur, für Folk-Programme und abcjs", "ABC notation (.abc) – one melody per track, for folk software and abcjs", "Notation ABC (.abc) – une mélodie par piste, pour logiciels folk et abcjs" },
+    { "Konvertieren nach", "Convert to", "Convertir en" },
+    { "Konvertierte Dateien speichern nach …", "Save converted files to …", "Enregistrer les fichiers convertis dans …" },
+    { "%1 Datei(en) als %2 gespeichert in %3", "%1 file(s) saved as %2 in %3", "%1 fichier(s) enregistré(s) en %2 dans %3" },
+    { "Nicht konvertiert:", "Not converted:", "Non converti :" },
+    { "UltraStar-Datei ohne Noten oder Tempo", "UltraStar file without notes or tempo", "Fichier UltraStar sans notes ni tempo" },
+    { "Dieses Feld gibt es im UltraStar-Format nicht", "The UltraStar format has no such field", "Ce champ n'existe pas dans le format UltraStar" },
+    { "UltraStar-Dateien brauchen einen Titel", "UltraStar files need a title", "Les fichiers UltraStar ont besoin d'un titre" },
     { "MIDI-Kopf beschädigt", "MIDI header damaged", "En-tête MIDI endommagé" },
     { "Spur 1 ist beschädigt – Schreiben abgebrochen", "Track 1 is damaged – writing cancelled", "La piste 1 est endommagée – écriture annulée" },
     { "Tonart nicht verstanden: ", "Key not understood: ", "Tonalité non comprise : " },
@@ -407,8 +516,6 @@ const Row kRows[] = {
     { "Ordner hinzufügen …", "Add folder …", "Ajouter un dossier …" },
     { "(noch keine Ordner)", "(no folders yet)", "(aucun dossier pour l'instant)" },
     { "Im Explorer öffnen", "Open in Explorer", "Ouvrir dans l'Explorateur" },
-    { "Aus der Liste nehmen (Einträge behalten)", "Remove from the list (keep entries)", "Retirer de la liste (garder les entrées)" },
-    { "Aus der Liste nehmen und Einträge löschen", "Remove from the list and delete entries", "Retirer de la liste et supprimer les entrées" },
     { "Hell", "Light", "Clair" },
     { "Farbthema", "Colour theme", "Thème de couleurs" },
     { "Ähnlichkeitsschwelle (Dubletten)", "Similarity threshold (duplicates)", "Seuil de similarité (doublons)" },

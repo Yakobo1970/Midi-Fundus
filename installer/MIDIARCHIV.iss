@@ -12,7 +12,7 @@
 ;   "C:\Program Files\Inno Setup 7\ISCC.exe" installer\MIDIARCHIV.iss
 
 #define AppName "Midi-Fundus"
-#define AppVersion "1.0.0"
+#define AppVersion "1.1.0"
 #define AppPublisher "Kay 'Yakobo' Fiedler (Yakobo1970)"
 #define AppURL "https://www.undabtanzbar.de"
 #define AppExeName "Midi-Fundus.exe"

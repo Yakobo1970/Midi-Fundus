@@ -4,6 +4,9 @@ Midi-Fundus durchsucht beliebig viele Ordner samt Unterordnern nach MIDI-Dateien
 Wissenswerte in einer großen, frei einstellbaren Tabelle: Titel, Interpret, Komponist, Genre, Jahr,
 Copyright, Tonart, Skala, Tempo, Takt, Dauer, Instrumente, Liedtext und mehr. Schon beim Einlesen
 findet es Dubletten – nicht am Dateinamen, sondern an den Noten, auch transponiert oder in anderem Tempo.
+Neben MIDI liest es über 20 verwandte Formate – von Spielemusik (XMI, MUS, HMP, CMF, SMAF) über DAW-Projekte
+(Cakewalk, FL Studio, Ableton Live, Studio One / Fender Studio Pro, DAWproject, REAPER, Reason) bis zu Noten (MusicXML, MuseScore, ABC, Humdrum)
+und UltraStar-Karaoke – und konvertiert jede Datei per Rechtsklick nach MIDI, MusicXML, ABC, DAWproject oder REAPER.
 Läuft als VST3 in jeder DAW oder als eigenständiges Programm; Oberfläche auf Deutsch, Englisch und Französisch.
 
 ![Midi-Fundus](docs/main.png)
@@ -18,8 +21,13 @@ Projektseite: https://www.undabtanzbar.de/software/midi-fundus/
 | ![Dubletten](docs/dups.png) | ![Hell](docs/light.png) |
 
 ## Funktionen
-- **Einlesen:** beliebig viele Ordner (auch per Drag & Drop ins Fenster), rekursiv, `.mid` `.midi` `.kar` `.rmi`;
+- **Einlesen:** beliebig viele Ordner (auch per Drag & Drop ins Fenster), rekursiv, `.mid` `.midi` `.kar` `.rmi` und alle Formate aus der Tabelle unten;
   parallel, unveränderte Dateien werden beim nächsten Mal übersprungen. Erprobt mit rund 90 000 Dateien.
+  Kommt ein Ordner hinzu, wird nur er eingelesen – ein Fenster fragt, welche der vorhandenen Ordner mitgelesen werden sollen.
+- **Schreibschutz je Ordner:** im selben Fenster (oder „Ordner“ → „Ordner verwalten …“) – in geschützten Ordnern ändert, verschiebt
+  und löscht Midi-Fundus nichts (auch nicht als Ziel von Kopieren, Verschieben oder Konvertieren); ihre Dateien erscheinen rötlich.
+- **Ordner entfernen:** „Ordner“ → Ordner → „Aus dem Fundus entfernen“ nimmt den Ordner samt Einträgen aus der Datenbank (die Dateien bleiben);
+  Einträge ohne Ordner (aus älteren Versionen) räumt „Ordner“ → „… Einträge ohne Ordner entfernen“ auf.
 - **Analyse:** Tonart, Skala, Tempo, Takt, Dauer, Spuren, Kanäle, Notenanzahl, GM-Instrumente, Liedtext (Karaoke),
   Sprache des Liedtexts und ein „Notengebirge“ als Mini-Profil jeder Datei.
 - **Tabelle:** Spalten sortieren, verschieben, verbreitern, ein- und ausblenden; unter jeder Spalte ein eigenes
@@ -36,6 +44,16 @@ Projektseite: https://www.undabtanzbar.de/software/midi-fundus/
 - **Vorhören:** Leertaste oder Doppelklick – mit eingebautem SoundFont (GeneralUser GS), dem Windows-GM-Synth,
   eingebauten Synth-Klängen oder als MIDI an die DAW. Im Plugin auf Wunsch taktgenau mit dem DAW-Transport.
 - **In die DAW:** Zeilen anfassen und auf eine Spur ziehen – auch mehrere Dateien auf einmal.
+- **UltraStar:** Karaoke-Songs (`.txt` mit `#TITLE`/`#BPM`) erscheinen mit Format „UltraStar“: Gesangsmelodie, Liedtext, Sprache,
+  Duette (P1/P2), Relativ-Modus, UTF-8 und Windows-1252. Titel, Interpret, Genre, Jahr, Sprache und Kommentar werden in die Kopfzeilen
+  geschrieben (Kodierung bleibt). In die DAW gezogen wird daraus eine MIDI-Datei.
+- **Konvertieren:** Rechtsklick → Datei → „Konvertieren nach“ – jede Datei (auch mehrere markierte) als
+  MIDI (`.mid`, SMF Typ 1 – für jede DAW), MusicXML (`.musicxml`, Version 3.1 – für MuseScore 3 und neuer, Finale,
+  Sibelius, Dorico …; quantisiert auf Sechzehntel und Triolen, bis zu vier Stimmen je System, Haltebögen über Taktgrenzen,
+  Schlagzeug als Percussion-Notation), ABC (`.abc`, Version 2.1 – eine Melodie je Spur), DAWproject (`.dawproject`, Version 1.0 –
+  für Bitwig 5 und neuer, Studio One 6.5 und neuer / Fender Studio Pro, Cubase 14 und neuer; je Instrument eine Spur mit Clip,
+  Tempo- und Taktwechsel, Marker, Lautstärke und Panorama, Titel und Interpret) oder REAPER (`.rpp`, eine MIDI-Spur je Instrument
+  inklusive aller Controller). Instrumente weist man danach in der DAW selbst zu – der GM-Klang steht im Spurkommentar.
 - **Recherche:** Rechtsklick → Internetsuche, automatische Suche fehlender Angaben (MusicBrainz, Wikidata)
   und ein „Deep-Modus“, der über die Melodie verwandte Dateien findet.
 - **Dateien verwalten:** kopieren, verschieben (Bewertung und Daten bleiben erhalten), in den Papierkorb legen;
@@ -44,6 +62,36 @@ Projektseite: https://www.undabtanzbar.de/software/midi-fundus/
   eingebaute Hilfe und Tooltipps über „?“.
 
 Die Datenbank liegt in `%APPDATA%\MIDIARCHIV` und wird von Standalone und Plugin gemeinsam genutzt.
+
+## Unterstützte Formate
+Alle Formate werden beim Einlesen intern in MIDI umgewandelt – Tonart, Dubletten, Vorhören, Pianorolle und das Ziehen in die DAW
+funktionieren damit wie bei MIDI. Bearbeiten (in die Datei schreiben) geht bei MIDI und UltraStar; alle anderen sind schreibgeschützt.
+
+| Format | Endungen | Herkunft | Was gelesen wird |
+|---|---|---|---|
+| Standard-MIDI | `.mid` `.midi` `.smf` `.kar` `.rmi` | überall | alles, inklusive Liedtext (KAR) und RIFF-Hülle (RMI) |
+| UltraStar | `.txt` | Karaoke-Spiele (UltraStar Deluxe, Vocaluxe …) | Gesangsmelodie, Liedtext, Duette, Kopfzeilen (schreibbar) |
+| XMI | `.xmi` | Miles Sound System (Ultima, Wizardry, Dark Sun …) | erste Sequenz, 120-Hz-Zeitbasis |
+| MUS | `.mus` | DMX (Doom, Heretic, Hexen) | alle Kanäle, 140-Hz-Zeitbasis |
+| HMP | `.hmp` | Human Machine Interfaces (Descent …) | alle Spuren (alte und 013195-Variante) |
+| CMF | `.cmf` | Creative Music File (Sound Blaster) | Noten, Titel, Komponist, Bemerkung |
+| SMAF | `.mmf` | Yamaha-Handy-Klingeltöne („Handyphone Standard“, MA-1/MA-2) | 16 Kanäle inkl. Schlagzeug; MA-3/5 „Mobile Standard“ nicht |
+| Cakewalk | `.wrk` | Cakewalk / Pro Audio (WRK-Version 2 und 3) | Spuren, Segmente, Tempo, Takt, Titel, Autor, Copyright |
+| FL Studio | `.flp` | FL Studio (geprüft mit 20.7) | Pattern-Noten über die Playlist platziert, Kanalnamen, Tempo |
+| Ableton Live | `.als` | Live 11 und 12 (geprüft) | Arrangement-Clips (oder Session-Szenen nacheinander), Loops, Tempo |
+| Studio One | `.song` | Studio One / Fender Studio Pro (geprüft mit Studio One 6 und 7) | Musik-Spuren und -Parts, Tempo, Titel, Interpret, Genre, Jahr |
+| DAWproject | `.dawproject` | offenes Austauschformat: Bitwig 5+, Studio One 6.5+ / Fender Studio Pro, Cubase 14+ | Arrangement-Clips (oder Szenen nacheinander), Loops, Clip-Verweise, Tempo- und Taktwechsel, Marker, Metadaten |
+| REAPER | `.rpp` | REAPER (Textformat) | MIDI-Items aller Spuren, Loops, Startversatz, aktiver Take, Tempo-Hüllkurve, Marker, Render-Metadaten, Projektnotizen |
+| Reason | `.reason` `.rps` `.rns` | Reason (geprüft: .rns, .rps ab 4.0, .reason bis 12) | nur Tempo, Taktart, Länge, Titel, Version – die Noten speichert Reason verschlüsselt |
+| MusicXML | `.musicxml` `.xml` `.mxl` | Notenprogramme | Stimmen, Haltebögen, Akkorde, Tempo, Schlagzeug, Liedtext |
+| MuseScore | `.mscz` `.mscx` | MuseScore (geprüft mit 1.x; 2–4 nach Formatbeschreibung) | Systeme, Stimmen, Triolen, Haltebögen, Tempo, Titel |
+| ABC | `.abc` | Volksmusik-Sammlungen (thesession.org …) | erstes Stück der Datei, Stimmen, Liedtext |
+| Humdrum | `.krn` | KernScores (Klassik) | alle `**kern`-Spalten, Tempo, Taktart, Titel, Komponist |
+
+Die Leser wurden an echten Dateien geprüft (u. a. 853 Studio-One-Songs, 2 607 SMAF-Klingeltöne mit 774 MIDI-Gegenstücken,
+138 Cakewalk-, 212 XMI-, 14 HMP- und 573 Reason-Dateien); ABC, Humdrum, MUS, CMF, DAWproject und REAPER an eigenen
+Testdateien nach der jeweiligen Formatbeschreibung. DAWproject- und REAPER-Export werden per Rundlauf geprüft (alle Noten,
+Länge, Schlagzeug und Titel identisch).
 
 ## Bauen
 ```
@@ -55,7 +103,7 @@ Installer: `ISCC installer\MIDIARCHIV.iss` (Inno Setup 7) → `dist_installer\Mi
 
 ## Tests
 Alle Testprogramme mit der Umgebungsvariable `MIDIARCHIV_DB` auf eine **Kopie** der Datenbank richten.
-- `ArchivTest info|write <datei>`, `ArchivTest scan <db> <ordner>`, `ArchivTest groups <db>`, `ArchivTest lang`, `ArchivTest fileops <mid>`
+- `ArchivTest info|write <datei>`, `ArchivTest scan <db> <ordner>`, `ArchivTest groups <db>`, `ArchivTest lang`, `ArchivTest fileops <mid>`, `ArchivTest ultrastar`, `ArchivTest formats`, `ArchivTest projects`, `ArchivTest export <datei…>`, `ArchivTest batch <liste> <ergebnis>`
 - `UiShot shot <out.png> [breite höhe] [select n] [dupsonly] [light] [about] [keys] [clean]` – rendert die Oberfläche; `keys` prüft Tastatursteuerung und Rückgängig
 - `UiShot synctest`, `UiShot voicetest`, `UiShot carrytest` – Wiedergabe, DAW-Sync, hängende Stimmen
 - `HostTest <Midi-Fundus.vst3>` – lädt das VST3 wie eine DAW

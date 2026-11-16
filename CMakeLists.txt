@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(MIDIARCHIV VERSION 1.0.0 LANGUAGES C CXX)
+project(MIDIARCHIV VERSION 1.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,6 +9,15 @@ add_subdirectory(${JUCE_DIR} JUCE)
 
 set(MA_CORE
     Source/MidiData.cpp
+    Source/UltraStar.cpp
+    Source/Formats.cpp
+    Source/FormatsGame.cpp
+    Source/FormatsSmaf.cpp
+    Source/FormatsDaw.cpp
+    Source/FormatsScore.cpp
+    Source/FormatsProject.cpp
+    Source/Export.cpp
+    Source/ExportDaw.cpp
     Source/Archive.cpp
     Source/Lang.cpp
     Source/WebLookup.cpp)
@@ -43,7 +52,8 @@ set(MA_DEFS
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0
-    JUCE_DISPLAY_SPLASH_SCREEN=0)
+    JUCE_DISPLAY_SPLASH_SCREEN=0
+    MA_VERSION_STRING="${PROJECT_VERSION}")
 
 target_compile_definitions(MIDIARCHIV PUBLIC ${MA_DEFS})
 

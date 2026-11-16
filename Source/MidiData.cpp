@@ -1,5 +1,7 @@
 #include "MidiData.h"
 #include "Lang.h"
+#include "UltraStar.h"
+#include "Formats.h"
 #include <algorithm>
 #include <map>
 #include <unordered_set>
@@ -259,6 +261,25 @@ bool extractSmf (const juce::MemoryBlock& data, juce::MemoryBlock& smf, size_t& 
             smfOffset = i;
             return true;
         }
+    ConvertedSong cs;
+    juce::String err;
+    if (convertToSmf (data, cs, err))
+    {
+        smf = cs.smf;
+        smfOffset = 0;
+        return true;
+    }
+    return false;
+}
+
+// true if the data is a Standard MIDI File or RIFF RMID (no conversion needed)
+static bool hasMidiHeader (const juce::MemoryBlock& data)
+{
+    auto* d = static_cast<const juce::uint8*> (data.getData());
+    const size_t n = data.getSize();
+    if (n >= 12 && memcmp (d, "RIFF", 4) == 0 && memcmp (d + 8, "RMID", 4) == 0) return true;
+    for (size_t i = 0; i + 14 <= n && i <= 512; ++i)
+        if (memcmp (d + i, "MThd", 4) == 0) return true;
     return false;
 }
 
@@ -317,6 +338,27 @@ MidiInfo analyseMidiFile (const juce::File& f, bool keepNotes)
 
 MidiInfo analyseMidi (const juce::MemoryBlock& data, bool keepNotes)
 {
+    if (! hasMidiHeader (data))
+    {
+        ConvertedSong cs;
+        juce::String err;
+        if (! convertToSmf (data, cs, err)) { MidiInfo bad; bad.error = err; return bad; }
+        auto m = analyseMidi (cs.smf, keepNotes);
+        m.sourceFormat = cs.format;
+        m.ultrastar = cs.format == "UltraStar";
+        m.readOnly = ! cs.writable;
+        m.rmi = false;
+        auto take = [] (juce::String& dst, const juce::String& v) { if (v.isNotEmpty()) dst = v; };
+        take (m.title, cs.title); take (m.artist, cs.artist); take (m.composer, cs.composer); take (m.genre, cs.genre);
+        take (m.copyright, cs.copyright); take (m.comment, cs.comment);
+        if (cs.year > 0) m.year = cs.year;
+        if (m.seconds <= 0 && cs.seconds > 0) m.seconds = cs.seconds;
+        if (cs.lyrics.isNotEmpty()) { m.lyrics = cs.lyrics; m.karaoke = true; }
+        if (cs.language.isNotEmpty()) m.language = cs.language;
+        else if (m.language.isEmpty() && m.lyrics.length() > 60) m.language = detectLanguage (m.lyrics);
+        if (m.ultrastar) { m.title = cs.title; m.artist = cs.artist; m.genre = cs.genre; m.comment = cs.comment; m.year = cs.year; m.composer = {}; m.copyright = {}; }
+        return m;
+    }
     MidiInfo m;
     juce::MemoryBlock smf;
     size_t off = 0;
@@ -712,6 +754,8 @@ juce::File backupFolder()
     return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("MIDIARCHIV").getChildFile ("Sicherung");
 }
 
+static bool commitWrite (const juce::File&, const MidiInfo&, const juce::MemoryBlock&, juce::String&);
+
 bool writeMidiField (const juce::File& f, Field field, const juce::String& rawValue, juce::String& error)
 {
     const auto value = rawValue.replace ("\n", " ").trim();
@@ -719,6 +763,17 @@ bool writeMidiField (const juce::File& f, Field field, const juce::String& rawVa
     if (! f.loadFileAsData (data)) { error = T ("Datei nicht lesbar"); return false; }
     const auto before = analyseMidi (data);
     if (! before.ok) { error = before.error; return false; }
+    if (before.readOnly)
+    {
+        error = T ("Dieses Format kann Midi-Fundus nur lesen – „Konvertieren nach“ erzeugt eine bearbeitbare MIDI-Datei");
+        return false;
+    }
+    if (before.ultrastar)
+    {
+        juce::MemoryBlock result;
+        if (! writeUltraStarField (data, field, value, result, error)) return false;
+        return commitWrite (f, before, result, error);
+    }
     juce::MemoryBlock smf;
     size_t off = 0;
     extractSmf (data, smf, off);
@@ -862,7 +917,12 @@ bool writeMidiField (const juce::File& f, Field field, const juce::String& rawVa
         result.append (newSmf.getData(), newSmf.getSize());
     }
 
-    // verify: same music, new value readable
+    return commitWrite (f, before, result, error);
+}
+
+// verify (same music), back up the original once, replace the file atomically
+static bool commitWrite (const juce::File& f, const MidiInfo& before, const juce::MemoryBlock& result, juce::String& error)
+{
     const auto after = analyseMidi (result);
     if (! after.ok || after.noteHash != before.noteHash || after.noteCount != before.noteCount)
     {

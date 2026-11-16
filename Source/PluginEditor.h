@@ -54,6 +54,26 @@ private:
     juce::Rectangle<int> box() const;
 };
 
+// Folder window: which folders to read (after adding folders: the new ones) and which are write-protected.
+class FolderPickPanel : public juce::Component
+{
+public:
+    FolderPickPanel (MidiArchivEditor& e, const juce::StringArray& newFolders);   // empty = "manage folders" from the menu
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    void mouseDown (const juce::MouseEvent& e) override;
+private:
+    MidiArchivEditor& ed;
+    juce::StringArray paths;
+    juce::OwnedArray<juce::ToggleButton> toggles, locks;
+    juce::Component content;
+    void updateStart();
+    juce::Viewport view;
+    juce::TextButton all, none, start, cancel;
+    juce::Rectangle<int> box() const;
+    void closeLater();
+};
+
 class PositionBar : public juce::Component, public juce::SettableTooltipClient
 {
 public:
@@ -102,6 +122,9 @@ public:
     void setStatus (const juce::String& s);
     void showAbout (bool show);
     void closeSuggest();
+    void closeFolderPick();
+    void confirmRemove (const juce::String& title, const juce::String& text, std::function<int (ma::Archive&)> action);
+    void scanAddedFolders (const juce::StringArray& added, bool manage = false);   // new folders + a choice of the existing ones; manage: from the menu
     void play (ma::Entry* e);
     void showCellMenu (ma::Entry& e, int col, juce::Point<int> screen);
     void startOnlineLookup (ma::Entry& e);
@@ -109,8 +132,9 @@ public:
     void undo();
     void copyMelody (ma::Entry& e, bool openMusipedia);
     std::vector<int> targetsFor (ma::Entry& clicked);              // all marked rows if the clicked one is marked
-    void trashFiles (const std::vector<int>& ids, std::function<void()> after = {});
+    void trashFiles (const std::vector<int>& allIds, std::function<void()> after = {});
     void copyOrMoveFiles (const std::vector<int>& ids, bool move);
+    void convertFiles (const std::vector<int>& ids, int format);   // ExportFormat: 0 MIDI, 1 MusicXML, 2 ABC, 3 DAWproject, 4 REAPER
     void refreshNow();
     juce::ThreadPool& jobs() { return pool; }
 
@@ -130,6 +154,7 @@ private:
     juce::Label emptyHint;
     juce::Rectangle<int> logoArea, statusArea, headerArea;
     std::unique_ptr<ma::ui::AboutPanel> about;
+    std::unique_ptr<ma::ui::FolderPickPanel> folderPick;
     std::unique_ptr<ma::ui::SuggestPanel> suggest;
     std::unique_ptr<juce::FileChooser> chooser;
     juce::ThreadPool pool { 2 };

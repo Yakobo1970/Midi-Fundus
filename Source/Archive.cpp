@@ -1,5 +1,7 @@
 #include "Archive.h"
 #include "Lang.h"
+#include "UltraStar.h"
+#include "Formats.h"
 
 namespace ma
 {
@@ -34,6 +36,11 @@ bool isMidiFileName (const juce::String& name)
     return n.endsWith (".mid") || n.endsWith (".midi") || n.endsWith (".kar") || n.endsWith (".rmi") || n.endsWith (".smf");
 }
 
+bool isArchiveFile (const juce::File& f)
+{
+    return isMidiFileName (f.getFileName()) || isConvertibleFile (f);
+}
+
 juce::String formatDuration (double s)
 {
     const int t = juce::roundToInt (s);
@@ -48,10 +55,12 @@ void Entry::fill (const MidiInfo& m)
     year = m.year; format = m.format; tracks = m.numTracks; channels = m.channelCount; notes = m.noteCount; drumNotes = m.drumNotes;
     bpm = (float) m.bpm; seconds = (float) m.seconds; keyConfidence = m.keyConfidence;
     noteHash = m.noteHash; sketch = m.sketch; gramCount = m.gramCount; mountain = m.mountain; pitchClasses = m.pitchClasses;
-    flags &= ~(juce::uint32) (fTitleFromName | fArtistFromName | fError | fKaraoke | fRmi | fTempoChanges);
+    flags &= ~(juce::uint32) (fTitleFromName | fArtistFromName | fError | fKaraoke | fRmi | fTempoChanges | fUltraStar | fConverted);
     if (! m.ok) flags |= fError;
     if (m.karaoke) flags |= fKaraoke;
     if (m.rmi) flags |= fRmi;
+    if (m.ultrastar) flags |= fUltraStar;
+    if (m.sourceFormat.isNotEmpty()) flags |= fConverted;
     if (m.tempoChanges) flags |= fTempoChanges;
 
     // fall back to the file name: "Artist - Title.mid"
@@ -80,7 +89,7 @@ struct Archive::Scanner : public juce::Thread
             for (const auto& it : juce::RangedDirectoryIterator (juce::File (f), true, "*", juce::File::findFiles))
             {
                 if (threadShouldExit()) return;
-                if (isMidiFileName (it.getFile().getFileName())) { files.add (it.getFile()); arch.total = files.size(); }
+                if (isArchiveFile (it.getFile())) { files.add (it.getFile()); arch.total = files.size(); }
             }
         }
         {
@@ -147,6 +156,7 @@ struct Archive::Scanner : public juce::Thread
 Archive::Archive()
 {
     load();
+    applyProtection();
     initLanguage (settings);
     startIndexBuild();
     startTimer (250);
@@ -172,52 +182,80 @@ Entry* Archive::byPath (const juce::String& path) const
     return it != pathIndex.end() ? it->second : nullptr;
 }
 
-void Archive::addFolder (const juce::File& dir)
+juce::String Archive::addFolder (const juce::File& dir)
 {
     const auto p = dir.getFullPathName();
-    for (auto& f : folders) if (p.equalsIgnoreCase (f) || p.startsWithIgnoreCase (f + juce::File::getSeparatorString())) return;
+    for (auto& f : folders) if (p.equalsIgnoreCase (f) || p.startsWithIgnoreCase (f + juce::File::getSeparatorString())) return f;
     // a new parent folder replaces its sub folders
     for (int i = folders.size(); --i >= 0;)
         if (folders[i].startsWithIgnoreCase (p + juce::File::getSeparatorString())) folders.remove (i);
     folders.add (p);
     saveSoon();
     changed();
+    return p;
 }
 
-void Archive::removeFolder (const juce::String& path, bool removeEntries)
+int Archive::removeWhere (const std::function<bool (const Entry&)>& pred)
 {
-    folders.removeString (path, true);
-    if (removeEntries)
+    const auto before = list.size();
+    list.erase (std::remove_if (list.begin(), list.end(), [&] (auto& e) { return pred (*e); }), list.end());
+    const int removed = (int) (before - list.size());
+    if (removed > 0)
     {
-        const auto prefix = path + juce::File::getSeparatorString();
-        list.erase (std::remove_if (list.begin(), list.end(), [&] (auto& e) { return e->path.startsWithIgnoreCase (prefix); }), list.end());
         pathIndex.clear(); idIndex.clear();
         for (auto& e : list) { pathIndex[e->path.toLowerCase()] = e.get(); idIndex[e->id] = e.get(); }
+        undoStack.clear();   // undo steps may point at removed entries
         startIndexBuild();
     }
     saveSoon();
     changed();
+    return removed;
+}
+
+int Archive::countInFolder (const juce::String& path) const
+{
+    const auto prefix = path + juce::File::getSeparatorString();
+    int n = 0;
+    for (auto& e : list) n += e->path.startsWithIgnoreCase (prefix) ? 1 : 0;
+    return n;
+}
+
+int Archive::removeFolder (const juce::String& path)
+{
+    stopScan();   // a scan still running would insert files of this folder again
+    folders.removeString (path, true);
+    const auto prefix = path + juce::File::getSeparatorString();
+    return removeWhere ([&] (const Entry& e) { return e.path.startsWithIgnoreCase (prefix); });
 }
 
 int Archive::removeMissing()
 {
-    const auto before = list.size();
-    list.erase (std::remove_if (list.begin(), list.end(), [] (auto& e) { return e->has (fMissing); }), list.end());
-    pathIndex.clear(); idIndex.clear();
-    for (auto& e : list) { pathIndex[e->path.toLowerCase()] = e.get(); idIndex[e->id] = e.get(); }
-    startIndexBuild();
-    saveSoon();
-    changed();
-    return (int) (before - list.size());
+    return removeWhere ([] (const Entry& e) { return e.has (fMissing); });
 }
 
-void Archive::startScan (bool full)
+int Archive::countOutsideFolders() const
+{
+    int n = 0;
+    for (auto& e : list) n += isInsideFolders (juce::File (e->path)) ? 0 : 1;
+    return n;
+}
+
+int Archive::removeOutsideFolders()
+{
+    if (isScanning()) return 0;
+    return removeWhere ([this] (const Entry& e) { return ! isInsideFolders (juce::File (e.path)); });
+}
+
+void Archive::startScan (bool full, const juce::StringArray& only)
 {
     if (scanner != nullptr || folders.isEmpty()) return;
+    juce::StringArray roots;
+    for (auto& f : folders) if (only.isEmpty() || only.contains (f, true)) roots.add (f);
+    if (roots.isEmpty()) return;
     total = 0; done = 0;
     seenPaths.clear();
     scanStart = juce::Time::getMillisecondCounter();
-    scanner = std::make_unique<Scanner> (*this, folders, full);
+    scanner = std::make_unique<Scanner> (*this, roots, full);
     scanner->startThread (juce::Thread::Priority::low);
     startTimer (150);
     changed();
@@ -247,11 +285,13 @@ void Archive::insertOrReplace (std::unique_ptr<Entry> e, bool& replaced)
     if (auto* old = byPath (e->path))
     {
         e->id = old->id; e->rating = old->rating; e->favourite = old->favourite;
+        markProtection (*e, protectedFolders());
         *old = std::move (*e);
         reindex (*old);
         replaced = true;
         return;
     }
+    markProtection (*e, protectedFolders());
     e->id = nextId++;
     auto* raw = e.get();
     pathIndex[raw->path.toLowerCase()] = raw;
@@ -276,7 +316,7 @@ void Archive::pump()
     const bool finished = scanner != nullptr && scanner->finished && ! scanner->isThreadRunning();
     if (finished)
     {
-        // whatever was not seen in the scanned folders is missing now
+        // whatever was not seen in the scanned folders is missing now (folders left out of this scan stay as they are)
         std::unordered_set<juce::String> seen;
         {
             const juce::ScopedLock sl (pendingLock);
@@ -285,7 +325,7 @@ void Archive::pump()
         for (auto& e : list)
         {
             bool inFolders = false;
-            for (auto& f : folders) inFolders |= e->path.startsWithIgnoreCase (f + juce::File::getSeparatorString());
+            for (auto& f : scanner->folders) inFolders |= e->path.startsWithIgnoreCase (f + juce::File::getSeparatorString());
             if (inFolders)
             {
                 if (seen.count (e->path.toLowerCase()) == 0) e->flags |= fMissing;
@@ -324,9 +364,56 @@ void Archive::timerCallback()
     if (dirty && ++saveCountdown >= 3) { saveCountdown = 0; save(); }
 }
 
+// ============================================================================================ write protection
+juce::StringArray Archive::protectedFolders() const
+{
+    juce::StringArray p;
+    p.addLines (settings.getProperty ("protected").toString());
+    p.removeEmptyStrings();
+    return p;
+}
+
+bool Archive::isProtected (const juce::String& path) const
+{
+    for (auto& f : protectedFolders())
+        if (path.equalsIgnoreCase (f) || path.startsWithIgnoreCase (f + juce::File::getSeparatorString())) return true;
+    return false;
+}
+
+void Archive::setProtected (const juce::String& folder, bool on)
+{
+    auto p = protectedFolders();
+    if (on) p.addIfNotAlreadyThere (folder, true);
+    else p.removeString (folder, true);
+    settings.setProperty ("protected", p.joinIntoString ("\n"), nullptr);
+    applyProtection();
+    saveSoon();
+    changed();
+}
+
+void Archive::applyProtection()
+{
+    const auto p = protectedFolders();
+    for (auto& e : list) markProtection (*e, p);
+}
+
+void Archive::markProtection (Entry& e, const juce::StringArray& prot) const
+{
+    bool on = false;
+    for (auto& f : prot) on |= e.path.startsWithIgnoreCase (f + juce::File::getSeparatorString());
+    if (on) e.flags |= fProtected;
+    else e.flags &= ~(juce::uint32) fProtected;
+}
+
+juce::String Archive::protectedMessage() const
+{
+    return T ("Schreibgeschützter Ordner – Midi-Fundus ändert, verschiebt und löscht hier nichts (Ordner → Ordner verwalten …)");
+}
+
 // ============================================================================================ edits
 bool Archive::setField (Entry& e, Field f, const juce::String& value, juce::String& error)
 {
+    if (isProtected (e.path)) { error = protectedMessage(); return false; }
     UndoGroup g (*this, e.name);
     remember (e, true);
     if (! writeMidiField (juce::File (e.path), f, value, error)) return false;
@@ -384,6 +471,7 @@ bool Archive::undo (juce::String& report)
         auto* e = byId (it->id);
         if (it->file)
         {
+            if (isProtected (e != nullptr ? e->path : it->path)) { failed.add (juce::File (it->path).getFileName() + " (" + T ("schreibgeschützt") + ")"); continue; }
             const juce::File f (e != nullptr ? e->path : it->path);
             if (! f.replaceWithData (it->data.getData(), it->data.getSize())) { failed.add (f.getFileName()); continue; }
             if (e != nullptr) reread (*e);
@@ -408,6 +496,7 @@ bool Archive::reread (Entry& e)
     e.crc = crc32 (mb.getData(), mb.getSize());
     e.fill (analyseMidi (mb));
     e.flags &= ~(juce::uint32) fMissing;
+    markProtection (e, protectedFolders());
     if (oldCrc != e.crc) reindex (e);
     saveSoon();
     changed();
@@ -438,6 +527,7 @@ void Archive::relocate (Entry& e, const juce::File& f)
     e.folder = f.getParentDirectory().getFullPathName();
     e.mtime = f.getLastModificationTime().toMilliseconds();
     e.flags &= ~(juce::uint32) fMissing;
+    markProtection (e, protectedFolders());
     pathIndex[e.path.toLowerCase()] = &e;
     saveSoon();
     changed();

@@ -1,5 +1,6 @@
 // MIDIARCHIV – the archive database: folders, scanned entries, duplicate groups. Shared by all instances in a process.
 #pragma once
+#include <functional>
 #include <juce_events/juce_events.h>
 #include <juce_data_structures/juce_data_structures.h>
 #include "MidiData.h"
@@ -12,7 +13,8 @@ namespace ma
 {
 enum Flags : juce::uint32
 {
-    fTitleFromName = 1, fArtistFromName = 2, fMissing = 4, fError = 8, fKaraoke = 16, fRmi = 32, fTempoChanges = 64
+    fTitleFromName = 1, fArtistFromName = 2, fMissing = 4, fError = 8, fKaraoke = 16, fRmi = 32, fTempoChanges = 64, fUltraStar = 128, fConverted = 256,
+    fProtected = 512   // inside a write-protected folder (not stored, recomputed)
 };
 
 enum DupKind : juce::uint8 { dupNone = 0, dupSimilar = 1, dupSameNotes = 2, dupIdentical = 3 };
@@ -63,12 +65,23 @@ public:
     juce::StringArray folders;
     juce::ValueTree settings { "SETTINGS" };   // UI layout, theme, thresholds (shared by standalone and plugin)
 
-    void addFolder (const juce::File& dir);
-    void removeFolder (const juce::String& path, bool removeEntries);
+    juce::String addFolder (const juce::File& dir);   // returns the archive folder that now covers dir
+    // Write protection per folder: Midi-Fundus never writes, moves or deletes files there (settings "protected").
+    juce::StringArray protectedFolders() const;
+    bool isProtected (const juce::String& path) const;
+    void setProtected (const juce::String& folder, bool on);
+    juce::String protectedMessage() const;
+    // Takes a folder out of the archive together with its entries (a running scan is stopped first,
+    // otherwise it would put files of the folder back). Returns the number of removed entries.
+    int removeFolder (const juce::String& path);
+    int countInFolder (const juce::String& path) const;
     int removeMissing();
+    // Entries that belong to no archive folder any more (e.g. after removing a folder with older versions).
+    int countOutsideFolders() const;
+    int removeOutsideFolders();
 
     // ---- scanning
-    void startScan (bool fullRescan = false);
+    void startScan (bool fullRescan = false, const juce::StringArray& only = {});   // only: subset of folders (empty = all)
     void stopScan();
     bool isScanning() const { return scanner != nullptr; }
     juce::String scanStatus() const;
@@ -158,6 +171,11 @@ private:
     void closeUndo();
     void remember (Entry& e, bool file);   // before a change
 
+    int removeWhere (const std::function<bool (const Entry&)>& pred);
+    void applyProtection();
+
+    void markProtection (Entry& e, const juce::StringArray& prot) const;
+
     void insertOrReplace (std::unique_ptr<Entry> e, bool& replaced);
     void changed() { ++changeCounter; sendChangeMessage(); }
     void timerCallback() override;
@@ -166,5 +184,6 @@ private:
 };
 
 bool isMidiFileName (const juce::String& name);
+bool isArchiveFile (const juce::File& f);   // MIDI by name, or an UltraStar .txt (header check)
 juce::String formatDuration (double seconds);
 } // namespace ma

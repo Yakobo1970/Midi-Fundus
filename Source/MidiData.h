@@ -1,4 +1,4 @@
-// MIDIARCHIV – reading, analysing and rewriting Standard MIDI Files (SMF 0/1/2, RIFF RMID, KAR).
+// MIDIARCHIV – reading, analysing and rewriting Standard MIDI Files (SMF 0/1/2, RIFF RMID, KAR) and UltraStar .txt.
 #pragma once
 #include <juce_core/juce_core.h>
 #include <array>
@@ -26,7 +26,9 @@ struct MidiInfo
 
     // file structure
     int format = 1, ppq = 96, numTracks = 0;
-    bool rmi = false, karaoke = false;
+    bool rmi = false, karaoke = false, ultrastar = false;   // ultrastar: converted from an UltraStar .txt
+    juce::String sourceFormat;   // non-empty for converted formats ("XMI", "MusicXML" …)
+    bool readOnly = false;       // converted format without write-back
 
     // metadata (as found in the file)
     juce::String title, artist, composer, genre, copyright, comment, language, lyrics;
@@ -59,7 +61,7 @@ juce::uint32 crc32 (const void* data, size_t size);
 MidiInfo analyseMidi (const juce::MemoryBlock& data, bool keepNotes = false);
 MidiInfo analyseMidiFile (const juce::File& f, bool keepNotes = false);
 
-// Extracts the SMF bytes (unwraps RIFF RMID). Returns false if not a MIDI file.
+// Extracts the SMF bytes (unwraps RIFF RMID, converts UltraStar .txt). Returns false if not a MIDI file.
 bool extractSmf (const juce::MemoryBlock& data, juce::MemoryBlock& smf, size_t& smfOffset);
 
 // Writes one metadata field into the file (track 0, tick 0). Atomic replace + one-time backup.

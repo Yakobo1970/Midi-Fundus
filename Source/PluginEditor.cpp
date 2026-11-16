@@ -1,5 +1,8 @@
 #include "PluginEditor.h"
 #include "IconArt.h"
+#include "UltraStar.h"
+#include "Formats.h"
+#include "Export.h"
 
 using namespace ma;
 using ma::ui::font;
@@ -241,6 +244,124 @@ void SuggestPanel::resized()
     for (int i = 0; i < toggles.size(); ++i) toggles[i]->setBounds (0, i * 28, content.getWidth(), 26);
 }
 
+// ============================================================================================ folder picker
+FolderPickPanel::FolderPickPanel (MidiArchivEditor& e, const juce::StringArray& newFolders) : ed (e)
+{
+    view.setViewedComponent (&content, false);
+    view.setScrollBarsShown (true, false);
+    addAndMakeVisible (view);
+    auto& arch = ed.archive();
+    std::vector<int> counts ((size_t) arch.folders.size(), 0);
+    for (auto& en : arch.entries())
+        for (int i = 0; i < arch.folders.size(); ++i)
+            if (en->path.startsWithIgnoreCase (arch.folders[i] + juce::File::getSeparatorString())) { ++counts[(size_t) i]; break; }
+    const auto prot = arch.protectedFolders();
+    // new folders first (ticked for reading), then the existing ones
+    for (int pass = 0; pass < 2; ++pass)
+        for (int i = 0; i < arch.folders.size(); ++i)
+        {
+            const auto& f = arch.folders[i];
+            const bool isNew = newFolders.contains (f, true);
+            if (isNew != (pass == 0)) continue;
+            paths.add (f);
+            auto* t = toggles.add (new juce::ToggleButton (f + "   " + (isNew ? T ("(neu)") : T ("(%1 Dateien im Archiv)", counts[(size_t) i]))));
+            t->setToggleState (isNew, juce::dontSendNotification);
+            t->onClick = [this] { updateStart(); };
+            content.addAndMakeVisible (t);
+            auto* l = locks.add (new juce::ToggleButton (T ("schreibgeschützt")));
+            l->setToggleState (prot.contains (f, true), juce::dontSendNotification);
+            l->setTooltip (T ("Midi-Fundus schreibt, verschiebt und löscht in diesem Ordner nichts (Dateien erscheinen rötlich)"));
+            content.addAndMakeVisible (l);
+        }
+    all.setButtonText (T ("Alle"));
+    none.setButtonText (T ("Keine"));
+    cancel.setButtonText (T ("Abbrechen"));
+    all.setTooltip (T ("Alle Ordner einlesen"));
+    none.setTooltip (T ("Keinen Ordner einlesen"));
+    all.onClick = [this] { for (auto* t : toggles) t->setToggleState (true, juce::dontSendNotification); updateStart(); };
+    none.onClick = [this] { for (auto* t : toggles) t->setToggleState (false, juce::dontSendNotification); updateStart(); };
+    start.onClick = [this] {
+        auto& a = ed.archive();
+        juce::StringArray chosen;
+        for (int i = 0; i < toggles.size(); ++i)
+        {
+            if (locks[i]->getToggleState() != a.protectedFolders().contains (paths[i], true)) a.setProtected (paths[i], locks[i]->getToggleState());
+            if (toggles[i]->getToggleState()) chosen.add (paths[i]);
+        }
+        if (! chosen.isEmpty()) a.startScan (false, chosen);
+        ed.refreshNow();
+        closeLater();
+    };
+    cancel.onClick = [this] { closeLater(); };
+    for (auto* b : { &all, &none, &start, &cancel }) addAndMakeVisible (b);
+    updateStart();
+}
+
+void FolderPickPanel::updateStart()
+{
+    bool any = false;
+    for (auto* t : toggles) any |= t->getToggleState();
+    start.setButtonText (any ? T ("Einlesen") : T ("Übernehmen"));
+}
+
+void FolderPickPanel::closeLater()   // not from inside the button callback that would delete itself
+{
+    juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MidiArchivEditor> (&ed)] { if (safe != nullptr) safe->closeFolderPick(); });
+}
+
+juce::Rectangle<int> FolderPickPanel::box() const
+{
+    return getLocalBounds().withSizeKeepingCentre (juce::jmin (940, getWidth() - 40), juce::jmin (196 + toggles.size() * 28, juce::jmin (600, getHeight() - 40)));
+}
+
+void FolderPickPanel::mouseDown (const juce::MouseEvent& e) { if (! box().contains (e.getPosition())) ed.closeFolderPick(); }
+
+void FolderPickPanel::paint (juce::Graphics& g)
+{
+    const auto& th = ed.theme();
+    g.fillAll (th.bg.withAlpha (0.7f));
+    auto b = box().toFloat();
+    g.setColour (th.panel);
+    g.fillRoundedRectangle (b, 12.0f);
+    g.setColour (th.accent);
+    g.drawRoundedRectangle (b, 12.0f, 1.5f);
+    auto r = box().reduced (18);
+    g.setColour (th.text);
+    g.setFont (font (17.0f, true));
+    g.drawText (T ("Ordner einlesen und schützen"), r.removeFromTop (26), juce::Justification::centredLeft, true);
+    g.setColour (th.dim);
+    g.setFont (font (13.0f));
+    g.drawFittedText (T ("Links: welche Ordner jetzt eingelesen werden (neue sind angehakt, nicht angehakte bleiben, wie sie sind). Rechts: schreibgeschützte Ordner – dort ändert, verschiebt und löscht Midi-Fundus nichts."),
+                      r.removeFromTop (40), juce::Justification::centredLeft, 2);
+    r.removeFromTop (6);
+    auto head = r.removeFromTop (18);
+    g.setFont (font (12.0f, true));
+    g.drawText (T ("Einlesen"), head, juce::Justification::centredLeft);
+    g.drawText (T ("Schreibschutz"), head.removeFromRight (190), juce::Justification::centredLeft);
+}
+
+void FolderPickPanel::resized()
+{
+    auto r = box().reduced (18);
+    r.removeFromTop (98);
+    auto bottom = r.removeFromBottom (30);
+    cancel.setBounds (bottom.removeFromRight (110));
+    bottom.removeFromRight (8);
+    start.setBounds (bottom.removeFromRight (130));
+    all.setBounds (bottom.removeFromLeft (80));
+    bottom.removeFromLeft (6);
+    none.setBounds (bottom.removeFromLeft (80));
+    r.removeFromBottom (10);
+    view.setBounds (r);
+    content.setSize (r.getWidth() - 14, juce::jmax (r.getHeight(), toggles.size() * 28));
+    const int lockW = 176;
+    for (int i = 0; i < toggles.size(); ++i)
+    {
+        toggles[i]->setBounds (0, i * 28, content.getWidth() - lockW - 8, 26);
+        locks[i]->setBounds (content.getWidth() - lockW, i * 28, lockW, 26);
+    }
+}
+
 // ============================================================================================ small parts
 void PositionBar::paint (juce::Graphics& g)
 {
@@ -367,6 +488,7 @@ MidiArchivEditor::~MidiArchivEditor()
     saveViewState();
     about.reset();
     suggest.reset();
+    folderPick.reset();
     setLookAndFeel (nullptr);
 }
 
@@ -393,6 +515,7 @@ void MidiArchivEditor::applyLanguage()
     dups.applyLanguage();
     about.reset();
     suggest.reset();
+    folderPick.reset();
     resized();
     refreshNow();
     repaint();
@@ -485,6 +608,7 @@ void MidiArchivEditor::resized()
     table.footer->layout();
     if (about) about->setBounds (getLocalBounds());
     if (suggest) suggest->setBounds (getLocalBounds());
+    if (folderPick) folderPick->setBounds (getLocalBounds());
     if (sizeRestored)
     {
         proc.uiState.setProperty ("w", getWidth(), nullptr);
@@ -504,7 +628,7 @@ bool MidiArchivEditor::keyPressed (const juce::KeyPress& k)
         if (proc.isPlaying()) proc.stop(); else play (table.selectedEntry());
         return true;
     }
-    if (k == juce::KeyPress::escapeKey) { if (about) { showAbout (false); return true; } if (suggest) { closeSuggest(); return true; } proc.stop(); return true; }
+    if (k == juce::KeyPress::escapeKey) { if (folderPick) { closeFolderPick(); return true; } if (about) { showAbout (false); return true; } if (suggest) { closeSuggest(); return true; } proc.stop(); return true; }
     if (k == juce::KeyPress ('f', juce::ModifierKeys::ctrlModifier, 0)) { search.grabKeyboardFocus(); return true; }
     if (k == juce::KeyPress ('z', juce::ModifierKeys::ctrlModifier, 0)) { undo(); return true; }
     return table.keyPressed (k);
@@ -609,6 +733,7 @@ void MidiArchivEditor::updateDupPanel()
 void MidiArchivEditor::play (Entry* e)
 {
     if (e == nullptr) return;
+    if (ma::hasLockedNotes (e->path)) { proc.stop(); setStatus (ma::lockedNotesMessage()); return; }
     if (! proc.play (juce::File (e->path))) setStatus (T ("Kann nicht abgespielt werden: %1", e->name));
     else setStatus ({});
 }
@@ -626,22 +751,61 @@ void MidiArchivEditor::showAbout (bool show)
 
 void MidiArchivEditor::closeSuggest() { suggest.reset(); }
 
+// New folders are always read; folders already in the archive only if the user ticks them (walking big folders takes time).
+void MidiArchivEditor::scanAddedFolders (const juce::StringArray& added, bool manage)
+{
+    if (arch->isScanning()) { if (! manage) setStatus (T ("Ordner hinzugefügt – „Einlesen“, sobald der laufende Scan fertig ist")); return; }
+    bool others = false;
+    for (auto& f : arch->folders) others |= ! added.contains (f, true);
+    if (! others && ! manage) { arch->startScan (false, added); return; }
+    folderPick = std::make_unique<ma::ui::FolderPickPanel> (*this, added);
+    addAndMakeVisible (*folderPick);
+    folderPick->setBounds (getLocalBounds());
+}
+
+void MidiArchivEditor::closeFolderPick() { folderPick.reset(); }
+
+void MidiArchivEditor::confirmRemove (const juce::String& title, const juce::String& text, std::function<int (Archive&)> action)
+{
+    juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::QuestionIcon, title, text, T ("Entfernen"), T ("Abbrechen"), this,
+        juce::ModalCallbackFunction::create ([safe = juce::Component::SafePointer<MidiArchivEditor> (this), action] (int r) {
+            if (r == 0 || safe == nullptr) return;
+            safe->proc.stop();
+            const int n = action (*safe->arch);
+            safe->setStatus (T ("%1 Einträge aus dem Fundus entfernt", n));
+            safe->refreshNow();
+            safe->dups.setEntry (safe->table.selectedEntry());
+        }));
+}
+
 void MidiArchivEditor::filesDropped (const juce::StringArray& files, int, int)
 {
-    int added = 0;
+    juce::StringArray added;
     for (auto& f : files)
     {
         juce::File file (f);
-        if (file.isDirectory()) { arch->addFolder (file); ++added; }
-        else if (isMidiFileName (file.getFileName())) { arch->addFolder (file.getParentDirectory()); ++added; }
+        if (file.isDirectory()) added.addIfNotAlreadyThere (arch->addFolder (file), true);
+        else if (isArchiveFile (file)) added.addIfNotAlreadyThere (arch->addFolder (file.getParentDirectory()), true);
     }
-    if (added > 0) arch->startScan();
+    if (! added.isEmpty()) scanAddedFolders (added);
 }
 
 bool MidiArchivEditor::shouldDropFilesWhenDraggedExternally (const juce::DragAndDropTarget::SourceDetails& d, juce::StringArray& files, bool& canMove)
 {
     if (d.description.toString() != "midiarchiv-files") return false;
     files = table.selectedPaths();
+    // other formats go out as a converted MIDI file (temporary copy)
+    const auto tmp = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("Midi-Fundus");
+    juce::StringArray out;
+    int locked = 0;
+    for (auto& p : files)
+    {
+        if (isMidiFileName (p)) { out.add (p); continue; }
+        if (hasLockedNotes (p)) { ++locked; continue; }
+        if (auto mid = midiCopyOf (juce::File (p), tmp); mid.existsAsFile()) out.add (mid.getFullPathName());
+    }
+    if (locked > 0) setStatus (lockedNotesMessage());
+    files = out;
     canMove = false;
     return ! files.isEmpty();
 }
@@ -653,8 +817,7 @@ void MidiArchivEditor::addFolderDialog()
                           [safe = juce::Component::SafePointer<MidiArchivEditor> (this)] (const juce::FileChooser& fc) {
                               if (safe == nullptr || fc.getResult() == juce::File()) return;
                               safe->arch->settings.setProperty ("lastFolder", fc.getResult().getFullPathName(), nullptr);
-                              safe->arch->addFolder (fc.getResult());
-                              safe->arch->startScan();
+                              safe->scanAddedFolders ({ safe->arch->addFolder (fc.getResult()) });
                           });
 }
 
@@ -662,23 +825,41 @@ void MidiArchivEditor::showFolderMenu()
 {
     juce::PopupMenu m;
     m.addItem (1, T ("Ordner hinzufügen …"));
+    m.addItem (2, T ("Ordner verwalten (einlesen, Schreibschutz) …"), ! arch->folders.isEmpty() && ! arch->isScanning());
     m.addSeparator();
     if (arch->folders.isEmpty()) m.addItem (-1, T ("(noch keine Ordner)"), false);
     for (int i = 0; i < arch->folders.size(); ++i)
     {
         juce::PopupMenu sub;
         sub.addItem (100 + i, T ("Im Explorer öffnen"));
-        sub.addItem (200 + i, T ("Aus der Liste nehmen (Einträge behalten)"));
-        sub.addItem (300 + i, T ("Aus der Liste nehmen und Einträge löschen"));
-        m.addSubMenu (arch->folders[i], sub);
+        sub.addItem (300 + i, T ("Aus dem Fundus entfernen (Ordner und Einträge) …"));
+        sub.addSeparator();
+        const bool prot = arch->protectedFolders().contains (arch->folders[i], true);
+        sub.addItem (400 + i, T ("Schreibgeschützt"), true, prot);
+        m.addSubMenu (arch->folders[i] + (prot ? "   " + T ("(schreibgeschützt)") : juce::String()), sub);
+    }
+    if (const int outside = arch->countOutsideFolders(); outside > 0)
+    {
+        m.addSeparator();
+        m.addItem (3, T ("%1 Einträge ohne Ordner entfernen …", outside), ! arch->isScanning());
     }
     m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (folders), [safe = juce::Component::SafePointer<MidiArchivEditor> (this)] (int r) {
         if (safe == nullptr || r == 0) return;
         auto& a = *safe->arch;
         if (r == 1) safe->addFolderDialog();
+        else if (r == 2) safe->scanAddedFolders ({}, true);
+        else if (r >= 400 && r < 500) { const auto f = a.folders[r - 400]; a.setProtected (f, ! a.protectedFolders().contains (f, true)); safe->refreshNow(); }
         else if (r >= 100 && r < 200) juce::File (a.folders[r - 100]).startAsProcess();
-        else if (r >= 200 && r < 300) a.removeFolder (a.folders[r - 200], false);
-        else if (r >= 300 && r < 400) a.removeFolder (a.folders[r - 300], true);
+        else if (r == 3) safe->confirmRemove (T ("Einträge ohne Ordner entfernen?"),
+                                              T ("%1 Einträge gehören zu keinem Ordner im Fundus mehr. Sie werden aus der Datenbank entfernt (mit Bewertung und Favorit); die Dateien selbst bleiben unangetastet.", a.countOutsideFolders()),
+                                              [] (Archive& x) { return x.removeOutsideFolders(); });
+        else if (r >= 300 && r < 400)
+        {
+            const auto f = a.folders[r - 300];
+            safe->confirmRemove (T ("Ordner aus dem Fundus entfernen?"),
+                                 T ("„%1“ und seine %2 Einträge werden aus der Datenbank entfernt (mit Bewertung und Favorit). Die Dateien selbst bleiben unangetastet. Ein laufender Scan wird dafür angehalten.", f, a.countInFolder (f)),
+                                 [f] (Archive& x) { return x.removeFolder (f); });
+        }
     });
 }
 
@@ -785,6 +966,15 @@ void MidiArchivEditor::showCellMenu (Entry& e, int col, juce::Point<int>)
         juce::PopupMenu files;
         files.addItem (41, n > 1 ? T ("%1 markierte Dateien kopieren nach …", n) : T ("Datei kopieren nach …"), n > 0);
         files.addItem (42, n > 1 ? T ("%1 markierte Dateien verschieben nach …", n) : T ("Datei verschieben nach …"), n > 0);
+        juce::PopupMenu convert;
+        convert.addSectionHeader (n > 1 ? T ("%1 markierte Dateien konvertieren", n) : T ("Datei konvertieren"));
+        convert.addItem (60, T ("MIDI-Datei (.mid) – für jede DAW: Ableton Live, Studio One / Fender Studio Pro, Reason, FL Studio, Cubase …"), n > 0);
+        convert.addItem (61, T ("MusicXML (.musicxml) – für Notenprogramme: MuseScore 3 und neuer, Finale, Sibelius, Dorico …"), n > 0);
+        convert.addItem (62, T ("ABC-Notation (.abc) – Melodie je Spur, für Folk-Programme und abcjs"), n > 0);
+        convert.addSeparator();
+        convert.addItem (63, T ("DAWproject (.dawproject) – Projekt mit Spuren, Tempo und Markern: Bitwig 5+, Studio One 6.5+ / Fender Studio Pro, Cubase 14+"), n > 0);
+        convert.addItem (64, T ("REAPER-Projekt (.rpp) – eine MIDI-Spur je Instrument"), n > 0);
+        files.addSubMenu (T ("Konvertieren nach"), convert, n > 0);
         files.addSeparator();
         files.addItem (40, n > 1 ? T ("%1 markierte Dateien löschen (Papierkorb) …", n) : T ("Datei löschen (Papierkorb) …"), n > 0);
         m.addSubMenu (n > 1 ? T ("Dateien (%1)", n) : T ("Datei"), files);
@@ -837,6 +1027,7 @@ void MidiArchivEditor::showCellMenu (Entry& e, int col, juce::Point<int>)
         else if (r == 2) juce::File (en->path).revealToUser();
         else if (r == 40) { safe->trashFiles (safe->targetsFor (*en)); return; }
         else if (r == 41 || r == 42) { safe->copyOrMoveFiles (safe->targetsFor (*en), r == 42); return; }
+        else if (r >= 60 && r <= 64) { safe->convertFiles (safe->targetsFor (*en), r - 60); return; }
         else if (r >= 100 && r < 100 + kNumEngines) webSearchUrl (r - 100, query).launchInDefaultBrowser();
         else if (r == 120) webSearchUrl (0, en->composer + " " + T ("Komponist")).launchInDefaultBrowser();
         else if (r == 121) webSearchUrl (0, query + " " + T ("Erscheinungsjahr")).launchInDefaultBrowser();
@@ -1019,9 +1210,13 @@ std::vector<int> MidiArchivEditor::targetsFor (Entry& clicked)
     return ids;
 }
 
-void MidiArchivEditor::trashFiles (const std::vector<int>& ids, std::function<void()> after)
+void MidiArchivEditor::trashFiles (const std::vector<int>& allIds, std::function<void()> after)
 {
-    if (ids.empty()) return;
+    std::vector<int> ids;
+    int locked = 0;
+    for (int id : allIds) if (auto* e = arch->byId (id); e != nullptr) { if (arch->isProtected (e->path)) ++locked; else ids.push_back (id); }
+    if (locked > 0) setStatus (T ("%1 Datei(en) in schreibgeschützten Ordnern bleiben unangetastet", locked));
+    if (ids.empty()) { if (locked > 0) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon, "Midi-Fundus", arch->protectedMessage()); return; }
     juce::String list;
     int shown = 0;
     for (int id : ids)
@@ -1053,6 +1248,43 @@ void MidiArchivEditor::trashFiles (const std::vector<int>& ids, std::function<vo
         }));
 }
 
+// "Convert to …": every marked file as MIDI, MusicXML or ABC into a chosen folder (sources stay untouched)
+void MidiArchivEditor::convertFiles (const std::vector<int>& ids, int format)
+{
+    std::vector<juce::String> paths;
+    for (int id : ids) if (auto* e = arch->byId (id); e != nullptr && ! e->has (fMissing)) paths.push_back (e->path);
+    if (paths.empty()) return;
+    const auto fmt = static_cast<ExportFormat> (juce::jlimit (0, 4, format));   // order of ExportFormat
+    chooser = std::make_unique<juce::FileChooser> (T ("Konvertierte Dateien speichern nach …"), juce::File (arch->settings.getProperty ("lastTarget").toString()));
+    chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+        [safe = juce::Component::SafePointer<MidiArchivEditor> (this), paths, fmt] (const juce::FileChooser& fc) {
+            const auto dir = fc.getResult();
+            if (safe == nullptr || ! dir.isDirectory()) return;
+            if (safe->arch->isProtected (dir.getFullPathName()))
+            { juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Midi-Fundus", safe->arch->protectedMessage()); return; }
+            safe->arch->settings.setProperty ("lastTarget", dir.getFullPathName(), nullptr);
+            int ok = 0, added = 0;
+            juce::String failed;
+            for (auto& p : paths)
+            {
+                juce::File written;
+                juce::String err;
+                if (exportFile (juce::File (p), fmt, dir, written, err))
+                {
+                    ++ok;
+                    if (safe->arch->isInsideFolders (written) && safe->arch->addFile (written) != nullptr) ++added;
+                }
+                else failed << juce::File (p).getFileName() << ": " << err << "\n";
+            }
+            juce::String msg = T ("%1 Datei(en) als %2 gespeichert in %3", ok, exportFormatName (fmt), dir.getFullPathName());
+            if (added > 0) msg << T ("  (%1 neu im Archiv)", added);
+            safe->setStatus (msg);
+            if (failed.isNotEmpty())
+                juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Midi-Fundus", T ("Nicht konvertiert:") + "\n" + failed.substring (0, 2000));
+            safe->refreshNow();
+        });
+}
+
 void MidiArchivEditor::copyOrMoveFiles (const std::vector<int>& ids, bool move)
 {
     if (ids.empty()) return;
@@ -1063,6 +1295,8 @@ void MidiArchivEditor::copyOrMoveFiles (const std::vector<int>& ids, bool move)
             const auto dir = fc.getResult();
             if (safe == nullptr || ! dir.isDirectory()) return;
             auto& a = *safe->arch;
+            if (a.isProtected (dir.getFullPathName()))
+            { juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Midi-Fundus", a.protectedMessage()); return; }
             a.settings.setProperty ("lastTarget", dir.getFullPathName(), nullptr);
             int ok = 0, renamed = 0, added = 0;
             juce::String failed;
@@ -1074,6 +1308,7 @@ void MidiArchivEditor::copyOrMoveFiles (const std::vector<int>& ids, bool move)
                 if (src.getParentDirectory() == dir) { failed << T ("%1 (liegt schon dort)", e->name) << "\n"; continue; }
                 auto dst = dir.getChildFile (src.getFileName());
                 if (dst.exists()) { dst = dst.getNonexistentSibling (true); ++renamed; }
+                if (move && a.isProtected (e->path)) { failed << T ("%1 (schreibgeschützter Ordner)", e->name) << "\n"; continue; }
                 if (move)
                 {
                     if (safe->proc.playingPath().equalsIgnoreCase (e->path)) safe->proc.stop();

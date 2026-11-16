@@ -1,5 +1,6 @@
 #include "ArchiveTable.h"
 #include "Look.h"
+#include "Formats.h"
 
 namespace ma
 {
@@ -245,6 +246,13 @@ void ArchiveTable::paintRowBackground (juce::Graphics& g, int row, int w, int h,
 void ArchiveTable::drawProfile (juce::Graphics& g, const Entry& e, juce::Rectangle<float> r)
 {
     const auto& th = theme();
+    if (e.notes == 0 && ma::hasLockedNotes (e.path))
+    {
+        g.setColour (th.dim);
+        g.setFont (juce::FontOptions (r.getHeight() * 0.62f).withStyle ("Italic"));
+        g.drawText (T ("Noten verschlüsselt"), r, juce::Justification::centredLeft, true);
+        return;
+    }
     const float bw = r.getWidth() / (float) kMountBins;
     // stacked areas: draw from the top slot down so lower layers stay visible
     for (int t = kMountTracks - 1; t >= 0; --t)
@@ -307,8 +315,8 @@ void ArchiveTable::paintCellContent (juce::Graphics& g, int row, int col, int w,
     }
     auto text = cellText (*e, col);
     bool derived = (col == cTitle && e->has (fTitleFromName)) || (col == cArtist && e->has (fArtistFromName));
-    auto colour = th.text;
-    if (derived || e->has (fMissing)) colour = th.dim;
+    auto colour = e->has (fProtected) ? th.text.interpolatedWith (juce::Colour (0xffe0503c), 0.6f) : th.text;
+    if (derived || e->has (fMissing)) colour = e->has (fProtected) ? colour.withMultipliedAlpha (0.6f) : th.dim;
     if (e->has (fError) && col == cComment) colour = th.track[0];
     if (col == cDup && e->group != 0) colour = e->dupKind == dupSimilar ? th.track[1] : th.track[0];
     if (col == cKaraoke && text.isNotEmpty()) text = T ("ja (%1)", text);
@@ -559,6 +567,7 @@ void ArchiveTable::startEdit (int row, int col, const juce::String& typed)
     auto* e = rowEntry (row);
     if (e == nullptr || colDef (col).field < 0 || ! table.getHeader().isColumnVisible (col)) return;
     if (e->has (fMissing)) { if (onStatus) onStatus (T ("Datei fehlt – nicht bearbeitbar")); return; }
+    if (e->has (fProtected)) { if (onStatus) onStatus (arch.protectedMessage()); return; }
     finishEdit (true, false, false);
     table.scrollToEnsureRowIsOnscreen (row);
     editId = e->id; editCol = col; curCol = col;
