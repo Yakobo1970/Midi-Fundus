@@ -71,8 +71,8 @@ const char* const kAboutDe =
     "Rechtsklick auf den Spaltenkopf blendet Spalten ein und aus. Anordnung und Breiten bleiben gespeichert.\n"
     "3. Unter der Tabelle steht die Suchmaske: ein Feld je Spalte, immer genau unter ihr. Alle Felder wirken zusammen.\n"
     "4. Klick auf Titel, Interpret, Komponist, Genre, Jahr, Copyright, Sprache, Kommentar oder Tonart (Datei) öffnet die Zelle direkt zum Bearbeiten "
-    "(Inhalt markiert, Cursor am Ende). Enter speichert – und zwar sofort in der MIDI-Datei selbst – und springt eine Zeile tiefer, Esc bricht ab. "
-    "Mit den Pfeiltasten wandert ein Rahmen von Zelle zu Zelle; Enter oder einfach Lostippen öffnet das Feld, Tab springt zum nächsten Feld. Im offenen Feld bewegen die Pfeiltasten nur den Cursor im Text; verlassen wird es mit Enter (bzw. Tab), Esc verwirft. Rechtsklick → „Rückgängig“ (Strg+Z) nimmt die letzte Änderung zurück. "
+    "(Inhalt markiert, Cursor am Ende). Enter speichert – und zwar sofort in der MIDI-Datei selbst – und springt eine Zeile tiefer, Esc bricht ab. Beim Tippen schlägt Midi-Fundus passende Werte aus dem Archiv vor (Titel, Interpret, Komponist, Genre, Copyright, Sprache): Pfeil hoch/runter wählt, Enter übernimmt (passende Anfänge zuerst, sonst alphabetisch). "
+    "Bedienung wie in einer Tabellenkalkulation: Die Pfeiltasten wandern von Zelle zu Zelle, bearbeitbare Felder stehen dabei markiert offen – einfach lostippen ersetzt den Inhalt. Sobald du etwas geändert, gezielt ins Feld geklickt oder F2 gedrückt hast, bewegen links/rechts den Cursor im Text; Enter speichert und springt eine Zeile tiefer, Tab ins nächste Feld, Esc verwirft. Rechtsklick → „Rückgängig“ (Strg+Z) nimmt die letzte Änderung zurück. "
     "Mehrfachbearbeitung: Zeilen mit Strg- bzw. Umschalt-Klick markieren – die zuletzt angeklickte Zelle wird bearbeitet, die Markierung bleibt, "
     "und Enter schreibt den Wert nach einer Rückfrage in alle markierten Dateien. Vor der ersten Änderung wird das Original einmalig nach "
     "%APPDATA%\\MIDIARCHIV\\Sicherung kopiert; nach dem Schreiben prüft Midi-Fundus, dass die Noten unverändert sind.\n"
@@ -99,9 +99,13 @@ const char* const kAboutDe =
     "SONG (Studio One / Fender Studio Pro), DAWPROJECT (Bitwig, Studio One, Cubase 14+), RPP (REAPER), Reason (.reason .rps .rns – nur Tempo, Taktart, Länge und Version, weil Reason die Noten "
     "verschlüsselt speichert) · Noten: MusicXML (.musicxml .xml .mxl), MuseScore (.mscz .mscx), ABC (.abc), Humdrum (.krn). "
     "Alle werden intern in MIDI umgewandelt: Tonart, Dubletten, Vorhören und Ziehen in die DAW funktionieren wie bei MIDI. "
-    "Diese Formate sind schreibgeschützt (außer UltraStar). Rechtsklick → Datei → „Konvertieren nach“ speichert jede Datei als "
+    "Diese Formate sind schreibgeschützt (außer UltraStar). Rechtsklick → Datei → „Konvertieren nach“ speichert jede Datei (bei einer Datei mit frei wählbarem Namen) als "
     "MIDI (für jede DAW), MusicXML (für Notenprogramme, quantisiert auf Sechzehntel und Triolen), ABC (eine Melodie je Spur), DAWproject (Projekt für Bitwig 5+, Studio One 6.5+ / Fender Studio Pro, Cubase 14+) "
-    "oder REAPER-Projekt – Instrumente weist du danach in der DAW zu.\n\n"
+    "REAPER-Projekt oder Ableton Live Set (braucht ein installiertes Ableton Live, dessen Vorlagen es nutzt; jedes Lied bekommt einen eigenen Ordner, jede Spur als Platzhalter einen Sampler mit den Original-Klängen aus dem GM-SoundFont – so hörst du gleich, wie es klingen sollte) – eigene Instrumente weist du danach in der DAW zu.\n\n"
+    "LUPE\n"
+    "Rechtsklick auf eine Stelle ohne eigenes Menü (in der Tabelle im Zeilenmenü unter „Lupe“) schaltet eine Bildschirmlupe ein, die der Maus folgt; Vergrößerung und Größe im selben Menü.\n\n"
+    "UPDATES\n"
+    "Einmal am Tag fragt Midi-Fundus bei GitHub nach, ob es eine neue Version gibt; dann erscheint oben ein grüner Knopf mit dem Download. Gesendet wird nur diese Anfrage – keine Daten über dich oder dein Archiv. Abschalten unter Einstellungen.\n\n"
     "SPRACHE\n"
     "Deutsch, English, Français – Auswahl im Setup oder jederzeit unter Einstellungen → „Sprache · Language · Langue“.\n\n"
     "LINKS\n"
@@ -134,8 +138,8 @@ const char* const kAboutEn =
     "Right-click the header to show or hide columns. Order and widths are remembered.\n"
     "3. Below the table is the search mask: one field per column, always right underneath it. All fields work together.\n"
     "4. Clicking title, artist, composer, genre, year, copyright, language, comment or key (file) opens the cell for editing right away "
-    "(content selected, cursor at the end). Enter saves – directly into the MIDI file itself – and moves one row down, Esc cancels. "
-    "The arrow keys move a frame from cell to cell; Enter or simply typing opens the field, Tab jumps to the next field. Inside an open field the arrow keys only move the text cursor; Enter (or Tab) leaves it, Esc discards. Right-click → “Undo” (Ctrl+Z) reverts the last change. "
+    "(content selected, cursor at the end). Enter saves – directly into the MIDI file itself – and moves one row down, Esc cancels. While you type, Midi-Fundus suggests matching values from the archive (title, artist, composer, genre, copyright, language): arrow up/down picks one, Enter takes it (matching beginnings first, otherwise alphabetical). "
+    "Works like a spreadsheet: the arrow keys walk from cell to cell, editable fields open with their content selected – just type to replace it. Once you have changed something, clicked into the field or pressed F2, left/right move the text cursor; Enter saves and moves one row down, Tab goes to the next field, Esc discards. Right-click → “Undo” (Ctrl+Z) reverts the last change. "
     "Multi-edit: select rows with Ctrl- or Shift-click – the cell clicked last is edited, the selection stays, "
     "and Enter writes the value into all selected files after asking. Before the first change the original is copied once to "
     "%APPDATA%\\MIDIARCHIV\\Sicherung; after writing, Midi-Fundus checks that the notes are unchanged.\n"
@@ -161,9 +165,13 @@ const char* const kAboutEn =
     "SONG (Studio One / Fender Studio Pro), DAWPROJECT (Bitwig, Studio One, Cubase 14+), RPP (REAPER), Reason (.reason .rps .rns – only tempo, metre, length and version, because Reason stores "
     "the notes encrypted) · notation: MusicXML (.musicxml .xml .mxl), MuseScore (.mscz .mscx), ABC (.abc), Humdrum (.krn). "
     "All of them are converted to MIDI internally: key, duplicates, preview and dragging into the DAW work as with MIDI. "
-    "These formats are read-only (except UltraStar). Right-click → File → “Convert to” saves any file as MIDI (for every DAW), "
+    "These formats are read-only (except UltraStar). Right-click → File → “Convert to” saves any file (a single one under a name of your choice) as MIDI (for every DAW), "
     "MusicXML (for notation programs, quantised to sixteenths and triplets), ABC (one melody per track), DAWproject (project for Bitwig 5+, Studio One 6.5+ / Fender Studio Pro, Cubase 14+) "
-    "or a REAPER project – assign the instruments in the DAW afterwards.\n\n"
+    "a REAPER project or an Ableton Live Set (needs an installed Ableton Live, whose templates it uses; every song gets its own folder and every track a Sampler with the original sounds of the GM SoundFont as a placeholder – so you hear right away how it should sound) – assign your own instruments in the DAW afterwards.\n\n"
+    "LOUPE\n"
+    "A right click on a spot without a menu of its own (in the table: the row menu → “Loupe”) switches on a screen loupe that follows the mouse; magnification and size in the same menu.\n\n"
+    "UPDATES\n"
+    "Once a day Midi-Fundus asks GitHub whether there is a new version; if so, a green button with the download appears at the top. Only this request is sent – no data about you or your archive. Switch it off under Settings.\n\n"
     "LANGUAGE\n"
     "Deutsch, English, Français – chosen in the setup or any time under Settings → “Sprache · Language · Langue”.\n\n"
     "LINKS\n"
@@ -197,8 +205,8 @@ const char* const kAboutFr =
     "largeur. Clic droit sur l'en-tête pour afficher ou masquer des colonnes. Ordre et largeurs sont mémorisés.\n"
     "3. Sous le tableau se trouve le masque de recherche : un champ par colonne, toujours juste en dessous. Tous les champs agissent ensemble.\n"
     "4. Un clic sur titre, interprète, compositeur, genre, année, copyright, langue, commentaire ou tonalité (fichier) ouvre la cellule pour "
-    "l'éditer (contenu sélectionné, curseur à la fin). Entrée enregistre – directement dans le fichier MIDI lui-même – et descend d'une ligne, Échap annule. "
-    "Les flèches déplacent un cadre de cellule en cellule ; Entrée ou simplement la frappe ouvre le champ, Tab passe au champ suivant. Dans un champ ouvert, les flèches ne déplacent que le curseur du texte ; on le quitte avec Entrée (ou Tab), Échap annule. Clic droit → « Annuler » (Ctrl+Z) revient sur la dernière modification. "
+    "l'éditer (contenu sélectionné, curseur à la fin). Entrée enregistre – directement dans le fichier MIDI lui-même – et descend d'une ligne, Échap annule. Pendant la frappe, Midi-Fundus propose les valeurs correspondantes de l'archive (titre, interprète, compositeur, genre, copyright, langue) : flèche haut/bas choisit, Entrée valide (débuts correspondants d'abord, sinon par ordre alphabétique). "
+    "Comme dans un tableur : les flèches passent de cellule en cellule, les champs modifiables s'ouvrent avec leur contenu sélectionné – il suffit de taper pour le remplacer. Dès qu'une modification est faite, un clic dans le champ ou F2, gauche/droite déplacent le curseur du texte ; Entrée enregistre et descend d'une ligne, Tab passe au champ suivant, Échap annule. Clic droit → « Annuler » (Ctrl+Z) revient sur la dernière modification. "
     "Édition multiple : sélectionner des lignes avec Ctrl ou Maj + clic – la dernière cellule cliquée est éditée, la sélection reste, et Entrée "
     "écrit la valeur dans tous les fichiers sélectionnés après confirmation. Avant la première modification, l'original est copié une seule fois "
     "dans %APPDATA%\\MIDIARCHIV\\Sicherung ; après l'écriture, Midi-Fundus vérifie que les notes sont inchangées.\n"
@@ -225,9 +233,13 @@ const char* const kAboutFr =
     "SONG (Studio One / Fender Studio Pro), DAWPROJECT (Bitwig, Studio One, Cubase 14+), RPP (REAPER), Reason (.reason .rps .rns – seulement tempo, mesure, durée et version, car Reason chiffre "
     "les notes) · partitions : MusicXML (.musicxml .xml .mxl), MuseScore (.mscz .mscx), ABC (.abc), Humdrum (.krn). "
     "Tous sont convertis en MIDI en interne : tonalité, doublons, écoute et glisser dans le DAW fonctionnent comme pour le MIDI. "
-    "Ces formats sont en lecture seule (sauf UltraStar). Clic droit → Fichier → « Convertir en » enregistre chaque fichier en "
+    "Ces formats sont en lecture seule (sauf UltraStar). Clic droit → Fichier → « Convertir en » enregistre chaque fichier (un seul : sous le nom de votre choix) en "
     "MIDI (pour tout DAW), MusicXML (pour les logiciels de partition, quantifié en doubles croches et triolets), ABC (une mélodie par piste), DAWproject (projet pour Bitwig 5+, Studio One 6.5+ / Fender Studio Pro, Cubase 14+) "
-    "ou projet REAPER – les instruments s'attribuent ensuite dans le DAW.\n\n"
+    "projet REAPER ou Live Set Ableton (nécessite Ableton Live installé, dont il utilise les modèles ; chaque morceau reçoit son propre dossier et chaque piste un Sampler avec les sons originaux de la SoundFont GM comme substitut – on entend tout de suite le son prévu) – vos propres instruments s'attribuent ensuite dans le DAW.\n\n"
+    "LOUPE\n"
+    "Un clic droit sur un endroit sans menu propre (dans le tableau : menu de la ligne → « Loupe ») active une loupe qui suit la souris ; grossissement et taille dans le même menu.\n\n"
+    "MISES À JOUR\n"
+    "Une fois par jour, Midi-Fundus demande à GitHub s'il existe une nouvelle version ; un bouton vert avec le téléchargement apparaît alors en haut. Seule cette requête est envoyée – aucune donnée sur vous ou votre archive. Désactivation sous Paramètres.\n\n"
     "LANGUE\n"
     "Deutsch, English, Français – choix dans l'installation ou à tout moment sous Paramètres → « Sprache · Language · Langue ».\n\n"
     "LIENS\n"
@@ -339,6 +351,34 @@ const Row kRows[] = {
     { "Suche MIDI-Dateien … %1 gefunden", "Looking for MIDI files … %1 found", "Recherche de fichiers MIDI … %1 trouvés" },
     { "Lese ein: %1 / %2  (%3)", "Scanning: %1 / %2  (%3)", "Analyse : %1 / %2  (%3)" },
     { "Datei nicht lesbar", "File not readable", "Fichier illisible" },
+    { "Live Set speichern unter … (der Name wird zum Songordner)", "Save Live Set as … (the name becomes the song folder)", "Enregistrer le Live Set sous … (le nom devient le dossier du morceau)" },
+    { "Konvertierte Datei speichern unter …", "Save converted file as …", "Enregistrer le fichier converti sous …" },
+    { "Live Set ersetzen?", "Replace the Live Set?", "Remplacer le Live Set ?" },
+    { "„%1“ gibt es schon. Ersetzen? (Vorhandene Samples im Ordner bleiben und werden mitbenutzt.)", "“%1” already exists. Replace it? (Samples already in the folder stay and are used again.)", "« %1 » existe déjà. Le remplacer ? (Les samples déjà présents dans le dossier restent et sont réutilisés.)" },
+    { "Ersetzen", "Replace", "Remplacer" },
+    { "SoundFont nicht lesbar: %1", "SoundFont not readable: %1", "SoundFont illisible : %1" },
+    { "Kein Klang im SoundFont für Programm %1", "No sound in the SoundFont for program %1", "Aucun son dans la SoundFont pour le programme %1" },
+    { "Ableton Live nicht gefunden – der Live-Set-Export braucht die Vorlagen einer installierten Live-Version", "Ableton Live not found – the Live Set export needs the templates of an installed Live version", "Ableton Live introuvable – l'export en Live Set a besoin des modèles d'une version installée de Live" },
+    { "Vorlagen der Live-Installation unvollständig (%1)", "Templates of the Live installation incomplete (%1)", "Modèles de l'installation Live incomplets (%1)" },
+    { "Lupe ausschalten", "Switch the loupe off", "Désactiver la loupe" },
+    { "Lupe einschalten", "Switch the loupe on", "Activer la loupe" },
+    { "Vergrößerung", "Magnification", "Grossissement" },
+    { "Lupengröße", "Loupe size", "Taille de la loupe" },
+    { "klein", "small", "petite" },
+    { "mittel", "medium", "moyenne" },
+    { "groß", "large", "grande" },
+    { "Lupe", "Loupe", "Loupe" },
+    { "Update %1 verfügbar", "Update %1 available", "Mise à jour %1 disponible" },
+    { "Midi-Fundus %1 ist erschienen (installiert: %2) – klicken für den Download", "Midi-Fundus %1 has been released (installed: %2) – click for the download", "Midi-Fundus %1 est sorti (installé : %2) – cliquer pour le téléchargement" },
+    { "Midi-Fundus %1 ist erschienen", "Midi-Fundus %1 has been released", "Midi-Fundus %1 est sorti" },
+    { "Download-Seite öffnen …", "Open the download page …", "Ouvrir la page de téléchargement …" },
+    { "Bis zum nächsten Start ausblenden", "Hide until the next start", "Masquer jusqu'au prochain démarrage" },
+    { "Nicht mehr nach Updates suchen", "Stop looking for updates", "Ne plus chercher de mises à jour" },
+    { "Einmal am Tag nach Updates suchen (GitHub)", "Look for updates once a day (GitHub)", "Chercher des mises à jour une fois par jour (GitHub)" },
+    { "Update-Suche an – gesendet wird nur die Anfrage an GitHub, keine Daten über dich oder dein Archiv", "Update check on – only the request to GitHub is sent, no data about you or your archive", "Recherche de mises à jour activée – seule la requête à GitHub est envoyée, aucune donnée sur vous ou votre archive" },
+    { "Update-Suche aus", "Update check off", "Recherche de mises à jour désactivée" },
+    { "Ableton Live Set (.als) – Songordner mit MIDI-Spuren, Tempo, Taktart, Locators und den GM-Klängen als Sampler", "Ableton Live Set (.als) – song folder with MIDI tracks, tempo, time signature, locators and the GM sounds as Sampler", "Live Set Ableton (.als) – dossier du morceau avec pistes MIDI, tempo, mesure, locators et les sons GM en Sampler" },
+    { "Ableton Live Set (.als) – braucht ein installiertes Ableton Live", "Ableton Live Set (.als) – needs an installed Ableton Live", "Live Set Ableton (.als) – nécessite Ableton Live installé" },
     { "Entfernen", "Remove", "Retirer" },
     { "%1 Einträge aus dem Fundus entfernt", "%1 entries removed from the archive", "%1 entrées retirées de l'archive" },
     { "Aus dem Fundus entfernen (Ordner und Einträge) …", "Remove from the archive (folder and entries) …", "Retirer de l'archive (dossier et entrées) …" },

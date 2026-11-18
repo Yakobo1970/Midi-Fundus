@@ -429,6 +429,7 @@ juce::String exportExtension (ExportFormat f)
         case ExportFormat::abc: return ".abc";
         case ExportFormat::dawProject: return ".dawproject";
         case ExportFormat::reaper: return ".rpp";
+        case ExportFormat::ableton: return ".als";
     }
     return {};
 }
@@ -441,6 +442,7 @@ juce::String exportFormatName (ExportFormat f)
         case ExportFormat::abc: return "ABC";
         case ExportFormat::dawProject: return "DAWproject";
         case ExportFormat::reaper: return "REAPER";
+        case ExportFormat::ableton: return "Ableton Live";
     }
     return {};
 }
@@ -457,6 +459,7 @@ bool exportToMemory (const juce::MemoryBlock& data, const juce::String& sourceNa
     if (format == ExportFormat::midi) { out = smf; return true; }
     if (format == ExportFormat::dawProject) return daw::writeDawProject (smf, info, out, error);
     if (format == ExportFormat::reaper) return daw::writeReaper (smf, info, out, error);
+    if (format == ExportFormat::ableton) return daw::writeAbleton (smf, info, out, error);
     XSong song;
     if (! buildSong (smf, info, song, error)) return false;
     const auto text = format == ExportFormat::musicXml ? toMusicXml (song) : toAbc (song);
@@ -465,16 +468,70 @@ bool exportToMemory (const juce::MemoryBlock& data, const juce::String& sourceNa
     return true;
 }
 
+namespace
+{
+// Ableton: a project folder named after the song: <Song>/<Song>.als + <Song>/Samples/<GM instrument>/*.wav
+bool writeAbletonFolder (const juce::MemoryBlock& data, const juce::File& dir, juce::File& written, juce::String& error)
+{
+    const auto info = analyseMidi (data);
+    if (! info.ok) { error = info.error; return false; }
+    juce::MemoryBlock smf, out;
+    size_t off = 0;
+    if (! extractSmf (data, smf, off)) { error = T ("MIDI-Daten nicht lesbar"); return false; }
+    const bool created = ! dir.exists();
+    if (! dir.createDirectory()) { error = T ("Datei konnte nicht geschrieben werden (schreibgeschützt?)"); return false; }
+    if (! daw::writeAbleton (smf, info, out, error, dir.getChildFile ("Samples"))) { if (created) dir.deleteRecursively(); return false; }
+    written = dir.getChildFile (dir.getFileName() + ".als");
+    if (! written.replaceWithData (out.getData(), out.getSize())) { error = T ("Datei konnte nicht geschrieben werden (schreibgeschützt?)"); return false; }
+    return true;
+}
+} // namespace
+
+juce::String suggestedExportName (const juce::File& source, ExportFormat format)
+{
+    juce::MemoryBlock data;
+    MidiInfo info;
+    if (source.loadFileAsData (data)) info = analyseMidi (data);
+    return suggestedBaseName (info, source.getFileName()) + exportExtension (format);
+}
+
 bool exportFile (const juce::File& source, ExportFormat format, const juce::File& destFolder, juce::File& written, juce::String& error)
 {
     juce::MemoryBlock data, out;
     if (hasLockedNotes (source.getFileName())) { error = lockedNotesMessage(); return false; }
     if (! source.loadFileAsData (data)) { error = T ("Datei nicht lesbar"); return false; }
+    if (format == ExportFormat::ableton)
+    {
+        auto dir = destFolder.getChildFile (suggestedExportName (source, format).upToLastOccurrenceOf (".", false, false));
+        if (dir.exists()) dir = dir.getNonexistentSibling (true);
+        return writeAbletonFolder (data, dir, written, error);
+    }
     juce::String name;
     if (! exportToMemory (data, source.getFileName(), format, out, name, error)) return false;
     destFolder.createDirectory();
     written = destFolder.getChildFile (name);
     if (written.exists()) written = written.getNonexistentSibling (true);
+    if (! written.replaceWithData (out.getData(), out.getSize())) { error = T ("Datei konnte nicht geschrieben werden (schreibgeschützt?)"); return false; }
+    return true;
+}
+
+bool exportFileAs (const juce::File& source, ExportFormat format, const juce::File& target, juce::File& written, juce::String& error)
+{
+    juce::MemoryBlock data, out;
+    if (hasLockedNotes (source.getFileName())) { error = lockedNotesMessage(); return false; }
+    if (! source.loadFileAsData (data)) { error = T ("Datei nicht lesbar"); return false; }
+    const auto file = target.withFileExtension (exportExtension (format));
+    if (format == ExportFormat::ableton)
+    {
+        // the chosen name becomes the song folder (no extra level if the user already is inside a folder of that name)
+        const auto stem = juce::File::createLegalFileName (file.getFileNameWithoutExtension());
+        const auto dir = file.getParentDirectory().getFileName() == stem ? file.getParentDirectory() : file.getParentDirectory().getChildFile (stem);
+        return writeAbletonFolder (data, dir, written, error);
+    }
+    juce::String name;
+    if (! exportToMemory (data, source.getFileName(), format, out, name, error)) return false;
+    file.getParentDirectory().createDirectory();
+    written = file;
     if (! written.replaceWithData (out.getData(), out.getSize())) { error = T ("Datei konnte nicht geschrieben werden (schreibgeschützt?)"); return false; }
     return true;
 }

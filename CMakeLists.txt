@@ -18,6 +18,9 @@ set(MA_CORE
     Source/FormatsProject.cpp
     Source/Export.cpp
     Source/ExportDaw.cpp
+    Source/ExportAls.cpp
+    Source/GmSamples.cpp
+    Source/UpdateCheck.cpp
     Source/Archive.cpp
     Source/Lang.cpp
     Source/WebLookup.cpp)

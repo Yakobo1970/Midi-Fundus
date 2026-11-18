@@ -126,6 +126,7 @@ void DupView::applyLanguage()
 DupView::DupView (Archive& a, std::function<const Theme&()> t) : arch (a), theme (std::move (t))
 {
     members.setRowHeight (34);
+    members.setWantsKeyboardFocus (false);   // arrow keys always belong to the archive table (clicks here must not take them away)
     members.setColour (juce::ListBox::outlineColourId, juce::Colours::transparentBlack);
     addAndMakeVisible (members);
     for (auto* b : { &playA, &playB, &showB, &notDup, &trashA, &trashB }) addAndMakeVisible (b);
@@ -301,9 +302,27 @@ void DupView::paint (juce::Graphics& g)
         g.setColour (th.panel2.withAlpha (0.6f));
         g.fillRoundedRectangle (r.toFloat(), 6.0f);
         drawMountain (g, e, r.toFloat().reduced (6, 18).withTrimmedBottom (-12), th, true);
+        // name and folder: two files of the same name (other folders) must stay distinguishable
+        auto line = r.reduced (8, 2).removeFromTop (16);
+        const auto title = label + "  " + e.name;
+        const auto bold = font (12.0f, true);
         g.setColour (th.text);
-        g.setFont (font (12.0f, true));
-        g.drawText (label + "  " + e.name, r.reduced (8, 2).removeFromTop (16), juce::Justification::centredLeft, true);
+        g.setFont (bold);
+        const int tw = juce::jmin (line.getWidth(), juce::GlyphArrangement::getStringWidthInt (bold, title) + 10);
+        g.drawText (title, line.removeFromLeft (tw), juce::Justification::centredLeft, true);
+        // the folder, shortened from the front: the last folders tell two files of the same name apart
+        const auto small = font (11.5f);
+        juce::StringArray parts;
+        parts.addTokens (e.folder, "\\", {});
+        auto folder = e.folder;
+        while (parts.size() > 1 && juce::GlyphArrangement::getStringWidthInt (small, folder) > line.getWidth())
+        {
+            parts.remove (0);
+            folder = juce::String::fromUTF8 ("…\\") + parts.joinIntoString ("\\");
+        }
+        g.setColour (th.dim);
+        g.setFont (small);
+        g.drawText (folder, line, juce::Justification::centredLeft, true);
     };
     box (mountA, *ea, "A");
     box (mountB, *eb, "B");

@@ -1,9 +1,56 @@
 #include "ArchiveTable.h"
 #include "Look.h"
 #include "Formats.h"
+#include <map>
 
 namespace ma
 {
+// ---- suggestions while typing
+struct ArchiveTable::SuggestBox : public juce::Component
+{
+    explicit SuggestBox (ArchiveTable& o) : owner (o) { setAlwaysOnTop (true); setWantsKeyboardFocus (false); setMouseClickGrabsKeyboardFocus (false); }
+    ArchiveTable& owner;
+    juce::StringArray items;
+    juce::String query;
+    int selected = -1;
+    static constexpr int rowH = 20;
+    void paint (juce::Graphics& g) override
+    {
+        const auto& th = owner.theme();
+        g.setColour (th.panel);
+        g.fillRoundedRectangle (getLocalBounds().toFloat(), 4.0f);
+        g.setColour (th.accent);
+        g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (0.5f), 4.0f, 1.0f);
+        for (int i = 0; i < items.size(); ++i)
+        {
+            auto r = juce::Rectangle<int> (2, 2 + i * rowH, getWidth() - 4, rowH);
+            if (i == selected) { g.setColour (th.accent.withAlpha (0.4f)); g.fillRoundedRectangle (r.toFloat(), 3.0f); }
+            // the matching part in the accent colour
+            const auto& t = items[i];
+            const int at = t.indexOfIgnoreCase (query);
+            juce::AttributedString as;
+            as.setJustification (juce::Justification::centredLeft);
+            as.setWordWrap (juce::AttributedString::none);
+            auto add = [&] (const juce::String& part, juce::Colour c, bool bold) { if (part.isNotEmpty()) as.append (part, ui::font (13.0f, bold), c); };
+            if (at >= 0 && query.isNotEmpty())
+            {
+                add (t.substring (0, at), th.text, false);
+                add (t.substring (at, at + query.length()), th.accent, true);
+                add (t.substring (at + query.length()), th.text, false);
+            }
+            else add (t, th.text, false);
+            as.draw (g, r.reduced (6, 0).toFloat());
+        }
+    }
+    void mouseMove (const juce::MouseEvent& e) override { const int i = (e.y - 2) / rowH; if (i != selected && i >= 0 && i < items.size()) { selected = i; repaint(); } }
+    void mouseUp (const juce::MouseEvent& e) override
+    {
+        const int i = (e.y - 2) / rowH;
+        if (i >= 0 && i < items.size())
+            juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<ArchiveTable> (&owner), i] { if (safe) safe->acceptSuggestion (i); });
+    }
+};
+
 using ui::font;
 
 // ============================================================================================ footer
@@ -106,6 +153,7 @@ ArchiveTable::ArchiveTable (Archive& a, std::function<const Theme&()> t) : arch 
         h.addColumn (T (d->name), d->id, d->width, 28, 1200, juce::TableHeaderComponent::defaultFlags);
     h.setSortColumnId (cId, true);
     h.setStretchToFitActive (false);
+    table.addKeyListener (&navKeys);
     table.setHeaderHeight (26);
     table.setRowHeight (22);
     table.setMultipleSelectionEnabled (true);
@@ -118,6 +166,7 @@ ArchiveTable::ArchiveTable (Archive& a, std::function<const Theme&()> t) : arch 
 
 ArchiveTable::~ArchiveTable()
 {
+    table.removeKeyListener (&navKeys);
     footer.reset();
     editor.reset();
 }
@@ -452,8 +501,43 @@ void ArchiveTable::goTo (int row, int col, bool edit)
     table.scrollToEnsureRowIsOnscreen (row);
     scrollToColumn (col);
     table.repaint();
-    if (edit && isEditableCol (col) && ! rows[(size_t) row]->has (fMissing)) startEdit (row, col);
+    if (edit && canEdit (row, col)) startEdit (row, col);
     else table.grabKeyboardFocus();
+}
+
+void ArchiveTable::enterCaretMode()
+{
+    if (editor == nullptr) return;
+    caretMode = true;
+    editor->moveCaretToEnd();
+    // the field selects everything once it has the focus (a moment later): caret to the end after that
+    juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<juce::TextEditor> (editor.get())] {
+        if (safe != nullptr) safe->moveCaretToEnd();
+    });
+}
+
+bool ArchiveTable::canEdit (int row, int col) const
+{
+    auto* e = rowEntry (row);
+    return e != nullptr && isEditableCol (col) && ! e->has (fMissing) && ! e->has (fProtected) && table.getHeader().isColumnVisible (col);
+}
+
+bool ArchiveTable::navKey (const juce::KeyPress& k)
+{
+    if (editor != nullptr || rows.empty()) return false;
+    const auto mods = k.getModifiers();
+    if (mods.isAnyModifierKeyDown()) return false;   // Shift+arrows: extend the selection as usual
+    const int code = k.getKeyCode();
+    const int row = juce::jmax (0, table.getLastRowSelected());
+    int to = row;
+    if (code == juce::KeyPress::upKey) to = row - 1;
+    else if (code == juce::KeyPress::downKey) to = row + 1;
+    else if (code == juce::KeyPress::pageUpKey) to = row - pageRows();
+    else if (code == juce::KeyPress::pageDownKey) to = row + pageRows();
+    else return false;
+    to = juce::jlimit (0, (int) rows.size() - 1, to);
+    goTo (to, curCol, true);
+    return true;
 }
 
 bool ArchiveTable::editorKey (const juce::KeyPress& k)
@@ -464,6 +548,19 @@ bool ArchiveTable::editorKey (const juce::KeyPress& k)
     const int col = editCol;
     const auto code = k.getKeyCode();
     const bool plain = ! k.getModifiers().isCommandDown() && ! k.getModifiers().isAltDown();
+    if (suggest != nullptr && suggest->isVisible())
+    {
+        auto& sb = *suggest;
+        if (code == juce::KeyPress::downKey) { sb.selected = juce::jmin (sb.items.size() - 1, sb.selected + 1); sb.repaint(); return true; }
+        if (code == juce::KeyPress::upKey) { sb.selected = juce::jmax (-1, sb.selected - 1); sb.repaint(); return true; }
+        if (code == juce::KeyPress::escapeKey) { hideSuggestions(); return true; }
+        if ((code == juce::KeyPress::returnKey || code == juce::KeyPress::tabKey) && sb.selected >= 0)
+        {
+            editor->setText (sb.items[sb.selected], false);   // then as usual: Return saves, Tab goes on
+            hideSuggestions();
+        }
+        else if (code == juce::KeyPress::returnKey || code == juce::KeyPress::tabKey) hideSuggestions();
+    }
     auto commitAndGo = [this] (int toRow, int toCol, bool confirm = false)
     {
         finishEdit (true, false, confirm);
@@ -486,14 +583,31 @@ bool ArchiveTable::editorKey (const juce::KeyPress& k)
         if (c != col) commitAndGo (row, c);
         return true;
     }
-    // arrow keys stay inside the open field (caret to start/end); only Return, Tab or Esc leave it
-    if (code == juce::KeyPress::upKey || code == juce::KeyPress::downKey)
-    {
-        const bool shift = k.getModifiers().isShiftDown();
-        if (code == juce::KeyPress::upKey) editor->moveCaretToTop (shift); else editor->moveCaretToEnd (shift);
-        return true;
-    }
-    return false;
+    // like a spreadsheet: an unchanged field lets the arrow keys walk from cell to cell (the target field opens
+    // with its content selected); once something was typed, left/right move the caret, up/down stay, Return saves
+    if (code == juce::KeyPress::F2Key) { enterCaretMode(); return true; }
+    const bool up = code == juce::KeyPress::upKey, down = code == juce::KeyPress::downKey;
+    const bool left = code == juce::KeyPress::leftKey, right = code == juce::KeyPress::rightKey;
+    const bool page = code == juce::KeyPress::pageUpKey || code == juce::KeyPress::pageDownKey;
+    if (! (up || down || left || right || page)) return false;
+    const bool modified = caretMode || editor->getText() != editOriginal;
+    if (modified) return up || down || page;   // left/right: caret in the text
+    if (k.getModifiers().isAnyModifierKeyDown()) return false;   // Shift+left/right: select text
+    int toRow = row, toCol = col;
+    if (up) toRow = row - 1;
+    else if (down) toRow = row + 1;
+    else if (page) toRow = row + (code == juce::KeyPress::pageUpKey ? -pageRows() : pageRows());
+    else toCol = nextCol (col, left ? -1 : 1, false);
+    toRow = juce::jlimit (0, (int) rows.size() - 1, toRow);
+    if (toRow == row && toCol == col) return true;   // at the edge
+    // not inside the field's own key handler: the field is deleted on the way
+    auto move = [safe = juce::Component::SafePointer<ArchiveTable> (this), toRow, toCol] {
+        if (safe == nullptr) return;
+        safe->finishEdit (false, false, false);
+        safe->goTo (toRow, toCol, true);
+    };
+    if (syncForTest) move(); else juce::MessageManager::callAsync (move);
+    return true;
 }
 
 void ArchiveTable::selectedRowsChanged (int)
@@ -526,18 +640,24 @@ juce::String ArchiveTable::getCellTooltip (int row, int col)
 bool ArchiveTable::keyPressed (const juce::KeyPress& k)
 {
     const int row = table.getLastRowSelected();
-    if (k.getKeyCode() == juce::KeyPress::F2Key) { startEdit (row, isEditableCol (curCol) ? curCol : cTitle); return true; }
+    if (k.getKeyCode() == juce::KeyPress::F2Key)   // like a spreadsheet: straight into the input phase, caret at the end
+    {
+        startEdit (row, isEditableCol (curCol) ? curCol : cTitle);
+        enterCaretMode();
+        return true;
+    }
     if (editor != nullptr || row < 0 || rowEntry (row) == nullptr) return false;
+    if (navKey (k)) return true;   // also when the key came here via the editor (focus elsewhere)
     const auto code = k.getKeyCode();
     const auto mods = k.getModifiers();
     if ((code == juce::KeyPress::leftKey || code == juce::KeyPress::rightKey) && ! mods.isAnyModifierKeyDown())
     {
-        goTo (row, nextCol (curCol, code == juce::KeyPress::leftKey ? -1 : 1, false), false);
+        goTo (row, nextCol (curCol, code == juce::KeyPress::leftKey ? -1 : 1, false), true);
         return true;
     }
     if (code == juce::KeyPress::tabKey && ! mods.isCommandDown() && ! mods.isAltDown())
     {
-        goTo (row, nextCol (curCol, mods.isShiftDown() ? -1 : 1, true), false);
+        goTo (row, nextCol (curCol, mods.isShiftDown() ? -1 : 1, true), true);
         return true;
     }
     // typing on an editable cell starts editing with that character (space stays play/stop)
@@ -551,6 +671,80 @@ bool ArchiveTable::keyPressed (const juce::KeyPress& k)
     return false;
 }
 
+
+bool ArchiveTable::suggestionsFor (int col) const
+{
+    return col == cTitle || col == cArtist || col == cComposer || col == cGenre || col == cCopyright || col == cLanguage;
+}
+
+void ArchiveTable::hideSuggestions()
+{
+    if (suggest != nullptr) suggest->setVisible (false);
+}
+
+void ArchiveTable::updateSuggestions()
+{
+    if (editor == nullptr || ! suggestionsFor (editCol)) { hideSuggestions(); return; }
+    const auto q = editor->getText().trim();
+    if (q.isEmpty() || editor->getText() == editOriginal) { hideSuggestions(); return; }
+    std::vector<std::pair<juce::String, int>> list;
+    for (auto& kv : knownValues)
+        if (kv.first.containsIgnoreCase (q) && kv.first != q) list.push_back (kv);
+    // values that start with the typed text first, then the others – each group alphabetical (as the user expects)
+    std::sort (list.begin(), list.end(), [&q] (const auto& a, const auto& b) {
+        const bool sa = a.first.startsWithIgnoreCase (q), sb = b.first.startsWithIgnoreCase (q);
+        if (sa != sb) return sa;
+        return a.first.compareNatural (b.first) < 0;
+    });
+    if (list.empty()) { hideSuggestions(); return; }
+    if (suggest == nullptr) { suggest = std::make_unique<SuggestBox> (*this); addChildComponent (*suggest); }
+    suggest->items.clear();
+    for (size_t i = 0; i < list.size() && i < 12; ++i) suggest->items.add (list[i].first);
+    suggest->query = q;
+    suggest->selected = -1;
+    const auto er = getLocalArea (editor->getParentComponent(), editor->getBounds());
+    int w = juce::jmax (er.getWidth(), 240);
+    for (auto& s : suggest->items) w = juce::jmax (w, juce::jmin (520, juce::GlyphArrangement::getStringWidthInt (font (13.0f, true), s) + 20));
+    const int h = suggest->items.size() * SuggestBox::rowH + 4;
+    auto r = juce::Rectangle<int> (er.getX(), er.getBottom() + 1, w, h);
+    if (r.getBottom() > getHeight()) r.setY (er.getY() - h - 1);   // no room below: above the field
+    if (r.getRight() > getWidth()) r.setX (juce::jmax (0, getWidth() - w));
+    suggest->setBounds (r);
+    suggest->setVisible (true);
+    suggest->toFront (false);
+    suggest->repaint();
+}
+
+void ArchiveTable::acceptSuggestion (int index)
+{
+    if (suggest == nullptr || editor == nullptr || index < 0 || index >= suggest->items.size()) return;
+    editor->setText (suggest->items[index], false);
+    hideSuggestions();
+    editorKey (juce::KeyPress (juce::KeyPress::returnKey));   // like Return: save (and one row down)
+}
+
+juce::String ArchiveTable::suggestTest()
+{
+    juce::String log;
+    if (rows.size() < 3) return "too few rows";
+    // two artists that contain "Mart" (written into the files – test copies only)
+    commitValue (*rows[1], cArtist, "Martin Galway");
+    commitValue (*rows[2], cArtist, "Bang Martinson");
+    table.selectRow (0);
+    startEdit (0, cArtist, "M");
+    if (editor != nullptr) { editor->setText ("Mart", false); updateSuggestions(); }
+    log << "typed 'Mart': " << (suggest != nullptr && suggest->isVisible() ? suggest->items.joinIntoString (" | ") : juce::String ("(none)")) << juce::newLine;
+    if (editor != nullptr) editor->keyPressed (juce::KeyPress (juce::KeyPress::downKey));
+    if (editor != nullptr) editor->keyPressed (juce::KeyPress (juce::KeyPress::downKey));
+    log << "down x2 -> selected " << (suggest != nullptr ? suggest->selected : -9) << ", field '" << (editor != nullptr ? editor->getText() : juce::String()) << "'" << juce::newLine;
+    if (editor != nullptr) editor->keyPressed (juce::KeyPress (juce::KeyPress::upKey));
+    log << "up -> selected " << (suggest != nullptr ? suggest->selected : -9) << juce::newLine;
+    if (editor != nullptr) editor->keyPressed (juce::KeyPress (juce::KeyPress::returnKey));
+    if (auto* e0 = rowEntry (0)) log << "Return: row 0 artist '" << e0->artist << "', editing row " << rowOfId (editId) << ", suggestions " << (suggest != nullptr && suggest->isVisible() ? "visible" : "hidden") << juce::newLine;
+    finishEdit (false);
+    return log;
+}
+
 // ---- inline editing
 namespace
 {
@@ -558,7 +752,10 @@ namespace
     struct CellEditor : juce::TextEditor
     {
         std::function<bool (const juce::KeyPress&)> onKey;
+        std::function<void()> onClick;
         bool keyPressed (const juce::KeyPress& k) override { return (onKey && onKey (k)) || juce::TextEditor::keyPressed (k); }
+        // a click into the already open field puts the caret there: input phase
+        void mouseDown (const juce::MouseEvent& e) override { if (onClick) onClick(); juce::TextEditor::mouseDown (e); }
     };
 }
 
@@ -574,6 +771,8 @@ void ArchiveTable::startEdit (int row, int col, const juce::String& typed)
     scrollToColumn (col);
     auto ce = std::make_unique<CellEditor>();
     ce->onKey = [this] (const juce::KeyPress& k) { return editorKey (k); };
+    ce->onClick = [this] { caretMode = true; };
+    caretMode = false;
     editor = std::move (ce);
     editor->setFont (font (13.0f));
     editor->setIndents (4, 3);
@@ -581,6 +780,16 @@ void ArchiveTable::startEdit (int row, int col, const juce::String& typed)
                      : (col == cComment && e->has (fError)) ? juce::String() : cellText (*e, col), false);
     if (col == cYear) editor->setInputRestrictions (4, "0123456789");
     editor->addListener (this);
+    editOriginal = editor->getText();
+    knownValues.clear();
+    if (suggestionsFor (col))
+    {
+        std::map<juce::String, int> count;
+        for (auto& x : arch.entries())
+            if (auto v = cellText (*x, col).trim(); v.isNotEmpty() && ! (col == cTitle && x->has (fTitleFromName)) && ! (col == cArtist && x->has (fArtistFromName)))
+                ++count[v];
+        knownValues.assign (count.begin(), count.end());
+    }
     const auto& th = theme();
     editor->setColour (juce::TextEditor::outlineColourId, th.accent);
     editor->setColour (juce::TextEditor::focusedOutlineColourId, th.accent);
@@ -602,6 +811,7 @@ void ArchiveTable::startEdit (int row, int col, const juce::String& typed)
     if (typed.isNotEmpty())   // typing started the edit: replace the content with that character
     {
         editor->setText (typed, false);
+        updateSuggestions();
         editor->moveCaretToEnd();
         juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<juce::TextEditor> (editor.get())] {
             if (safe != nullptr && ! safe->hasKeyboardFocus (false)) { safe->grabKeyboardFocus(); safe->moveCaretToEnd(); }
@@ -622,10 +832,18 @@ void ArchiveTable::textEditorEscapeKeyPressed (juce::TextEditor&)
     table.grabKeyboardFocus();   // cell cursor stays where it is
     table.repaint();
 }
-void ArchiveTable::textEditorFocusLost (juce::TextEditor&) { juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<ArchiveTable> (this)] { if (safe) safe->finishEdit (true, true, false); }); }
+void ArchiveTable::textEditorFocusLost (juce::TextEditor&)
+{
+    juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<ArchiveTable> (this)] {
+        if (safe == nullptr) return;
+        if (safe->suggest != nullptr && safe->suggest->isVisible() && safe->suggest->isMouseOverOrDragging()) return;   // click into the suggestions
+        safe->finishEdit (true, true, false);
+    });
+}
 
 void ArchiveTable::finishEdit (bool commit, bool toSelection, bool writeDerived)
 {
+    hideSuggestions();
     if (editor == nullptr) return;
     auto ed = std::move (editor);
     ed->removeListener (this);

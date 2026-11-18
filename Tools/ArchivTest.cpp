@@ -9,6 +9,8 @@
 #include "../Source/Export.h"
 #include <juce_audio_basics/juce_audio_basics.h>
 #include "../Source/WebLookup.h"
+#include "../Source/UpdateCheck.h"
+#include "../Source/GmSamples.h"
 #include <iostream>
 #include <map>
 #include <set>
@@ -92,6 +94,33 @@ int main (int argc, char* argv[])
     _putenv_s ("MIDIARCHIV_BACKUP", juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("ma_test_backup").getFullPathName().toRawUTF8());
     juce::StringArray args;
     for (int i = 1; i < argc; ++i) args.add (juce::String::fromUTF8 (argv[i]));
+    if (args.size() >= 3 && args[0] == "gm")   // ArchivTest gm <bank> <program>: zones of a SoundFont preset
+    {
+        ma::gm::Preset p;
+        juce::String err;
+        if (! ma::gm::extract (ma::gm::findSoundFont(), args[1].getIntValue(), args[2].getIntValue(), {}, p, err)) { out (err); return 1; }
+        out (p.name + ": " + juce::String ((int) p.zones.size()) + " zones");
+        for (auto& z : p.zones)
+            out ("keys " + juce::String (z.loKey) + "-" + juce::String (z.hiKey) + " vel " + juce::String (z.loVel) + "-" + juce::String (z.hiVel)
+                 + " wave " + juce::String (z.wave) + " keycenter " + juce::String (p.waves[(size_t) z.wave].root) + " root " + juce::String (z.rootKey)
+                 + " transpose " + juce::String (z.transpose) + " tune " + juce::String (z.tune) + " keytrack " + juce::String (z.keyTrack)
+                 + " gain " + juce::String (z.gainDb, 1) + " pan " + juce::String (z.pan, 2) + " loop " + juce::String ((int) z.loop));
+        return 0;
+    }
+    if (args.size() >= 1 && args[0] == "update")   // ArchivTest update: version comparison + one real request to GitHub
+    {
+        auto t = [] (const char* x, const char* y, bool want) {
+            const bool got = ma::UpdateCheck::isNewer (x, y);
+            check (got == want, juce::String (x) + (got ? " > " : " !> ") + y);
+        };
+        t ("1.1.1", "1.1.0", true); t ("v1.2.0", "1.1.0", true); t ("1.1.0", "1.1.0", false); t ("1.0.0", "1.1.0", false);
+        t ("1.1.10", "1.1.9", true); t ("1.2", "1.1.5", true); t ("1.1", "1.1.0", false); t ("", "1.1.0", false); t ("2.0.0", "10.0.0", false);
+        const auto tag = ma::UpdateCheck::fetchLatest (8000);
+        out ("GitHub latest: '" + tag + "' (installed " MA_VERSION_STRING ")" + (ma::UpdateCheck::isNewer (tag, MA_VERSION_STRING) ? " -> update" : " -> current"));
+        check (tag.isNotEmpty(), "release tag received");
+        out (failures == 0 ? "ALL OK" : juce::String (failures) + " FAILED");
+        return failures;
+    }
     if (args.size() >= 2 && args[0] == "info") { printInfo (ma::analyseMidiFile (juce::File (args[1]))); return 0; }
     if (args.size() >= 2 && args[0] == "lookup")
     {
@@ -157,13 +186,14 @@ int main (int argc, char* argv[])
     if (args.size() >= 2 && args[0] == "export")   // ArchivTest export <file> [more files]: MIDI / MusicXML / ABC round trips
     {
         auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("ma_export");
-        dir.deleteRecursively();
+        if (auto d = juce::SystemStats::getEnvironmentVariable ("MA_EXPORT_DIR", {}); d.isNotEmpty()) dir = juce::File (d);   // keep the results somewhere else
+        else dir.deleteRecursively();
         for (int i = 1; i < args.size(); ++i)
         {
             const juce::File src (args[i]);
             const auto orig = ma::analyseMidiFile (src);
             out ("== " + src.getFileName() + "  (" + juce::String (orig.noteCount) + " notes, " + orig.key + ")");
-            for (auto f : { ma::ExportFormat::midi, ma::ExportFormat::musicXml, ma::ExportFormat::abc, ma::ExportFormat::dawProject, ma::ExportFormat::reaper })
+            for (auto f : { ma::ExportFormat::midi, ma::ExportFormat::musicXml, ma::ExportFormat::abc, ma::ExportFormat::dawProject, ma::ExportFormat::reaper, ma::ExportFormat::ableton })
             {
                 juce::File written;
                 juce::String err;
@@ -188,6 +218,25 @@ int main (int argc, char* argv[])
                            + " s, drums " + juce::String (b2.drumNotes) + "/" + juce::String (o2.drumNotes) + ", title '" + b2.title + "' " + err + b2.error);
                 }
                 if (ok) out ("      " + written.getFileName() + "  " + juce::String (written.getSize()) + " bytes");
+                if (ok && f == ma::ExportFormat::ableton)
+                {
+                    // project folder with the GM waves; every wave referenced by the set exists
+                    const auto dir = written.getParentDirectory();
+                    const auto waves = dir.getChildFile ("Samples").findChildFiles (juce::File::findFiles, true, "*.wav");
+                    juce::FileInputStream fin (written);
+                    juce::GZIPDecompressorInputStream gz (&fin, false, juce::GZIPDecompressorInputStream::gzipFormat);
+                    const auto xml = gz.readEntireStreamAsString();
+                    int refs = 0, missing = 0;
+                    for (int at = xml.indexOf ("<Path Value=\""); at >= 0; at = xml.indexOf (at + 1, "<Path Value=\""))
+                    {
+                        const auto path = xml.substring (at + 13, xml.indexOf (at + 13, "\""));
+                        if (! path.endsWithIgnoreCase (".wav")) continue;
+                        ++refs;
+                        missing += juce::File (path).existsAsFile() ? 0 : 1;
+                    }
+                    check (dir.getFileName() == written.getFileNameWithoutExtension() && waves.size() > 0 && refs > 0 && missing == 0,
+                           "Ableton project folder: " + juce::String (waves.size()) + " waves, " + juce::String (refs) + " zones, " + juce::String (missing) + " missing");
+                }
             }
         }
         out (failures == 0 ? "ALL OK" : juce::String (failures) + " FAILED");
@@ -505,7 +554,7 @@ int main (int argc, char* argv[])
         }
         // writing DAW projects of the hand-made files and reading them back
         for (auto& src : { f1, f3 })
-            for (auto fmt : { ma::ExportFormat::dawProject, ma::ExportFormat::reaper })
+            for (auto fmt : { ma::ExportFormat::dawProject, ma::ExportFormat::reaper, ma::ExportFormat::ableton })
             {
                 juce::File w;
                 juce::String err;
@@ -514,6 +563,22 @@ int main (int argc, char* argv[])
                 check (ok && b.ok && b.noteCount == o.noteCount && b.title == o.title && std::abs (b.seconds - o.seconds) < 0.05 && starts (b, 60) == starts (o, 60),
                        src.getFileName() + " -> " + ma::exportFormatName (fmt) + ": " + juce::String (b.noteCount) + " notes, " + juce::String (b.seconds, 3) + " s " + err + b.error);
             }
+        // save dialog: a name of one's own (extension added; Ableton: the name becomes the song folder, also when already inside it)
+        {
+            const auto dest = root.getChildFile ("named");
+            juce::File w1, w2, w3, w4;
+            juce::String e1, e2, e3, e4;
+            const bool r1 = ma::exportFileAs (f1, ma::ExportFormat::reaper, dest.getChildFile ("Mein Song"), w1, e1);
+            const bool r2 = ma::exportFileAs (f1, ma::ExportFormat::ableton, dest.getChildFile ("Mein Live Song.als"), w2, e2);
+            dest.getChildFile ("Schon da").createDirectory();
+            const bool r3 = ma::exportFileAs (f1, ma::ExportFormat::ableton, dest.getChildFile ("Schon da").getChildFile ("Schon da.als"), w3, e3);
+            const bool r4 = ma::exportFileAs (f1, ma::ExportFormat::reaper, dest.getChildFile ("Mein Song.rpp"), w4, e4);   // replaces
+            check (r1 && w1 == dest.getChildFile ("Mein Song.rpp") && w1.existsAsFile(), "save as REAPER: " + w1.getFullPathName() + " " + e1);
+            check (r2 && w2 == dest.getChildFile ("Mein Live Song").getChildFile ("Mein Live Song.als") && w2.existsAsFile()
+                   && dest.getChildFile ("Mein Live Song").getChildFile ("Samples").isDirectory(), "save as Ableton: " + w2.getFullPathName() + " " + e2);
+            check (r3 && w3 == dest.getChildFile ("Schon da").getChildFile ("Schon da.als"), "save as Ableton inside its folder: " + w3.getFullPathName() + " " + e3);
+            check (r4 && w4 == w1 && dest.findChildFiles (juce::File::findFiles, false, "*.rpp").size() == 1, "save as replaces: " + e4);
+        }
         root.deleteRecursively();
         out (failures == 0 ? "ALL OK" : juce::String (failures) + " FAILED");
         return failures;

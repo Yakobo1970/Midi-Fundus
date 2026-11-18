@@ -4,19 +4,25 @@
 //   ABC       (.abc, version 2.1)      – one voice per track, for folk / tune software and abcjs
 //   DAWproject (.dawproject, 1.0)      – Bitwig 5+, Studio One 6.5+ / Fender Studio Pro, Cubase 14+ (ExportDaw.cpp)
 //   REAPER    (.rpp)                   – REAPER project, one MIDI item per track (ExportDaw.cpp)
+//   Ableton   (.als)                   – Live Set built from the templates of an installed Live (ExportAls.cpp)
 // Notes are quantised for the notation formats (sixteenths and triplets), long notes are split at bar lines and tied.
 #pragma once
 #include <juce_core/juce_core.h>
 
 namespace ma
 {
-enum class ExportFormat { midi, musicXml, abc, dawProject, reaper };
+enum class ExportFormat { midi, musicXml, abc, dawProject, reaper, ableton };
 
 juce::String exportExtension (ExportFormat f);
 juce::String exportFormatName (ExportFormat f);
 
 // Writes <dest folder>/<Artist - Title>.<ext> (an existing file is never overwritten, a number is added).
 bool exportFile (const juce::File& source, ExportFormat format, const juce::File& destFolder, juce::File& written, juce::String& error);
+// Into a file name the user chose (save dialog; an existing file is replaced). Ableton: the name becomes the song folder
+// <name>/<name>.als with Samples/ inside.
+bool exportFileAs (const juce::File& source, ExportFormat format, const juce::File& target, juce::File& written, juce::String& error);
+// "<Artist - Title>.<ext>" (as exportFile would name it)
+juce::String suggestedExportName (const juce::File& source, ExportFormat format);
 
 // For tests: conversion into memory.
 bool exportToMemory (const juce::MemoryBlock& sourceData, const juce::String& sourceName, ExportFormat format,
@@ -27,5 +33,8 @@ namespace daw
 {
 bool writeDawProject (const juce::MemoryBlock& smf, const MidiInfo& info, juce::MemoryBlock& out, juce::String& error);
 bool writeReaper (const juce::MemoryBlock& smf, const MidiInfo& info, juce::MemoryBlock& out, juce::String& error);
+// sampleDir: write the GM SoundFont waves there and give every track a Sampler with them (empty = tracks without instrument)
+bool writeAbleton (const juce::MemoryBlock& smf, const MidiInfo& info, juce::MemoryBlock& out, juce::String& error, const juce::File& sampleDir = {});
+bool abletonInstalled();   // a Live installation with its templates was found
 }
 } // namespace ma

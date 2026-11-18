@@ -74,6 +74,8 @@ public:
     juce::TextEditor* cellEditor() const { return editor.get(); }   // tests
     bool isEditing() const { return editor != nullptr; }
     bool commitValue (Entry& e, int col, const juce::String& value);   // writes into the file (or DB)
+    juce::String suggestTest();   // UiShot: typing, arrow keys, Return on the suggestions
+    bool syncForTest = false;      // UiShot: cell moves at once instead of after the key handler
 
     // TableListBoxModel
     int getNumRows() override { return (int) rows.size(); }
@@ -105,11 +107,34 @@ private:
     void scrollToColumn (int col);
     void goTo (int row, int col, bool edit);
     bool editorKey (const juce::KeyPress&);
+    // spreadsheet navigation: arrow keys in the table open the field of the target cell (if editable)
+    bool navKey (const juce::KeyPress&);
+    struct NavKeys : juce::KeyListener
+    {
+        explicit NavKeys (ArchiveTable& o) : owner (o) {}
+        ArchiveTable& owner;
+        bool keyPressed (const juce::KeyPress& k, juce::Component*) override { return owner.navKey (k); }
+    } navKeys { *this };
+    bool canEdit (int row, int col) const;
+    void enterCaretMode();
+    int pageRows() const { return juce::jmax (1, table.getHeight() / juce::jmax (1, table.getRowHeight()) - 2); }
     void paintCellContent (juce::Graphics&, int row, int col, int w, int h);
 
     void textEditorReturnKeyPressed (juce::TextEditor&) override;
     void textEditorEscapeKeyPressed (juce::TextEditor&) override;
     void textEditorFocusLost (juce::TextEditor&) override;
+    void textEditorTextChanged (juce::TextEditor&) override { updateSuggestions(); }
+
+    // suggestions while typing: known values of the column that contain the text (word start first, then the most used)
+    struct SuggestBox;
+    std::unique_ptr<SuggestBox> suggest;
+    std::vector<std::pair<juce::String, int>> knownValues;   // distinct values of the edited column + count (collected at edit start)
+    juce::String editOriginal;
+    bool caretMode = false;   // input phase without a change yet: click into the open field or F2 (arrow keys stay in the text)
+    bool suggestionsFor (int col) const;
+    void updateSuggestions();
+    void hideSuggestions();
+    void acceptSuggestion (int index);
     void finishEdit (bool commit, bool toSelection = true, bool writeDerived = true);
     void applyValue (const std::vector<int>& ids, int col, const juce::String& value);
     int pendingId = 0, pendingCol = 0;   // single click on an editable cell: editor opens after mouse-up (unless a drag started)

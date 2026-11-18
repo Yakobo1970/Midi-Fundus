@@ -251,6 +251,16 @@ public:
             if (args.contains ("manage")) ed.scanAddedFolders ({}, true);
             if (args.contains ("folderpick") && arch.folders.size() > 0) ed.scanAddedFolders ({ arch.folders[arch.folders.size() - 1] });   // picker only, scan starts on click
             if (args.contains ("edit")) ed.tableView().startEdit (ed.tableView().list().getSelectedRow(), ma::cTitle);
+            // suggestions: "suggest" runs the key test (Return WRITES into the file – only with copied MIDIs!),
+            // "suggestshow <col> <text>" leaves the open list in the screenshot
+            if (args.contains ("suggest")) out.withFileExtension ("suggest.txt").replaceWithText (ed.tableView().suggestTest());
+            if (int i = args.indexOf ("suggestshow"); i > 0)
+            {
+                auto& tv = ed.tableView();
+                tv.startEdit (juce::jmax (0, tv.list().getSelectedRow()), args[i + 1].getIntValue(), args[i + 2].substring (0, 1));
+                if (auto* ce = tv.cellEditor()) ce->setText (args[i + 2], true);
+            }
+            if (int i = args.indexOf ("loupe"); i > 0) ed.showLoupeAt ({ args[i + 1].getIntValue(), args[i + 2].getIntValue() });
             if (args.contains ("keys"))   // cell navigation without writing anything (Return on an unchanged value writes nothing)
             {
                 auto& tv = ed.tableView();
@@ -263,7 +273,13 @@ public:
                     if (ce != nullptr) log << " text=\"" << ce->getText() << "\" allSelected=" << (int) (ce->getHighlightedRegion().getLength() == ce->getTotalNumChars());
                     log << "\n";
                 };
-                auto tableKey = [&] (int code, juce::ModifierKeys m = {}) { if (! tv.list().keyPressed (juce::KeyPress (code, m, 0))) tv.keyPressed (juce::KeyPress (code, m, 0)); };
+                tv.syncForTest = true;
+                // like the real program: the key goes to the open field if there is one, else to the list, then the table
+                auto tableKey = [&] (int code, juce::ModifierKeys m = {}) {
+                    const juce::KeyPress kp (code, m, 0);
+                    if (auto* ce = tv.cellEditor()) { ce->keyPressed (kp); return; }
+                    if (! tv.keyPressed (kp)) tv.list().keyPressed (kp);
+                };
                 auto edKey = [&] (int code) { if (auto* ce = tv.cellEditor()) ce->keyPressed (juce::KeyPress (code, {}, 0)); };
                 state ("start");
                 // scrolling while a cell is open: the editor must stay on its row (not float at a fixed spot)
@@ -293,6 +309,11 @@ public:
                 edKey (juce::KeyPress::rightKey);    state ("right (editor, all selected)");
                 edKey (juce::KeyPress::leftKey);     state ("left (editor, all selected)");
                 edKey (juce::KeyPress::tabKey);      state ("tab (editor)");
+                edKey (juce::KeyPress::leftKey);     state ("left (editor, unchanged) walks");
+                edKey (juce::KeyPress::F2Key);       state ("F2 (input phase)");
+                edKey (juce::KeyPress::leftKey);     state ("left after F2 stays");
+                edKey (juce::KeyPress::upKey);       state ("up after F2 stays");
+                edKey (juce::KeyPress::rightKey);    state ("right after F2 stays");
                 if (auto* ce = tv.cellEditor()) ce->keyPressed (juce::KeyPress (juce::KeyPress::escapeKey, {}, 0));
                 state ("escape");
                 tv.keyPressed (juce::KeyPress ('x', {}, 'x')); state ("type x");
@@ -307,6 +328,7 @@ public:
                     const int rating0 = en->rating;
                     tv.keyPressed (juce::KeyPress ('Q', {}, 'Q')); state ("type Q");
                     edKey (juce::KeyPress::leftKey);   state ("left (editor, typing)");
+                    edKey (juce::KeyPress::upKey);     state ("up (editor, typing) stays");
                     edKey (juce::KeyPress::returnKey); state ("return (editor) writes");
                     f.loadFileAsData (after);
                     {

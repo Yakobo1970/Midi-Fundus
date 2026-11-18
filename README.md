@@ -6,7 +6,7 @@ Copyright, Tonart, Skala, Tempo, Takt, Dauer, Instrumente, Liedtext und mehr. Sc
 findet es Dubletten – nicht am Dateinamen, sondern an den Noten, auch transponiert oder in anderem Tempo.
 Neben MIDI liest es über 20 verwandte Formate – von Spielemusik (XMI, MUS, HMP, CMF, SMAF) über DAW-Projekte
 (Cakewalk, FL Studio, Ableton Live, Studio One / Fender Studio Pro, DAWproject, REAPER, Reason) bis zu Noten (MusicXML, MuseScore, ABC, Humdrum)
-und UltraStar-Karaoke – und konvertiert jede Datei per Rechtsklick nach MIDI, MusicXML, ABC, DAWproject oder REAPER.
+und UltraStar-Karaoke – und konvertiert jede Datei per Rechtsklick nach MIDI, MusicXML, ABC, DAWproject, REAPER oder Ableton Live Set.
 Läuft als VST3 in jeder DAW oder als eigenständiges Programm; Oberfläche auf Deutsch, Englisch und Französisch.
 
 ![Midi-Fundus](docs/main.png)
@@ -35,8 +35,11 @@ Projektseite: https://www.undabtanzbar.de/software/midi-fundus/
   dazu eine Suche über alle Felder. Bewertung mit Sternen und Favoriten.
 - **Direkt bearbeiten:** Titel, Interpret, Komponist, Genre, Jahr, Copyright, Sprache, Kommentar und Tonart werden
   sofort in die MIDI-Datei geschrieben (das Original wird vorher einmalig gesichert, die Noten bleiben unangetastet).
-  Bedienung wie in einer Tabellenkalkulation: Pfeiltasten wandern von Zelle zu Zelle, Enter speichert und springt
+  Bedienung wie in einer Tabellenkalkulation: Pfeiltasten wandern von Zelle zu Zelle (bearbeitbare Felder stehen markiert offen,
+  Lostippen ersetzt; nach einer Änderung, einem Klick ins Feld oder F2 bewegen links/rechts den Cursor im Text), Enter speichert und springt
   eine Zeile tiefer, mehrere markierte Zeilen lassen sich auf einmal ändern. **Rückgängig** per Rechtsklick oder Strg+Z.
+  Beim Tippen schlägt Midi-Fundus passende Werte aus dem Archiv vor (Titel, Interpret, Komponist, Genre, Copyright, Sprache) –
+  passende Anfänge zuerst, sonst alphabetisch; Pfeil hoch/runter wählt, Enter übernimmt.
 - **Dubletten:** „identisch“ (Byte für Byte), „gleiche Noten“ (andere Texte/Einstellungen) und „ähnlich nn %“
   (gleiche Melodiefolgen, transpositions- und tempounabhängig). Die Dubletten-Ansicht zeigt beide Dateien als
   Notengebirge, das 12-Ton-Profil und übereinandergelegte Pianorollen: grün = in beiden Dateien, rot = nur in einer.
@@ -47,15 +50,26 @@ Projektseite: https://www.undabtanzbar.de/software/midi-fundus/
 - **UltraStar:** Karaoke-Songs (`.txt` mit `#TITLE`/`#BPM`) erscheinen mit Format „UltraStar“: Gesangsmelodie, Liedtext, Sprache,
   Duette (P1/P2), Relativ-Modus, UTF-8 und Windows-1252. Titel, Interpret, Genre, Jahr, Sprache und Kommentar werden in die Kopfzeilen
   geschrieben (Kodierung bleibt). In die DAW gezogen wird daraus eine MIDI-Datei.
-- **Konvertieren:** Rechtsklick → Datei → „Konvertieren nach“ – jede Datei (auch mehrere markierte) als
+- **Konvertieren:** Rechtsklick → Datei → „Konvertieren nach“ – jede Datei (eine mit frei wählbarem Namen im Speichern-Dialog,
+  mehrere markierte in einen Ordner) als
   MIDI (`.mid`, SMF Typ 1 – für jede DAW), MusicXML (`.musicxml`, Version 3.1 – für MuseScore 3 und neuer, Finale,
   Sibelius, Dorico …; quantisiert auf Sechzehntel und Triolen, bis zu vier Stimmen je System, Haltebögen über Taktgrenzen,
   Schlagzeug als Percussion-Notation), ABC (`.abc`, Version 2.1 – eine Melodie je Spur), DAWproject (`.dawproject`, Version 1.0 –
   für Bitwig 5 und neuer, Studio One 6.5 und neuer / Fender Studio Pro, Cubase 14 und neuer; je Instrument eine Spur mit Clip,
-  Tempo- und Taktwechsel, Marker, Lautstärke und Panorama, Titel und Interpret) oder REAPER (`.rpp`, eine MIDI-Spur je Instrument
-  inklusive aller Controller). Instrumente weist man danach in der DAW selbst zu – der GM-Klang steht im Spurkommentar.
+  Tempo- und Taktwechsel, Marker, Lautstärke und Panorama, Titel und Interpret), REAPER (`.rpp`, eine MIDI-Spur je Instrument
+  inklusive aller Controller) oder Ableton Live Set (`.als`, Live 11/12 – eine MIDI-Spur je Instrument mit Clip, Pitchbend,
+  Tempo- und Taktwechseln als Automation, Marker als Locators, Programmwechsel im Clip; gebaut aus den Vorlagen der installierten
+  Live-Version, daher nur mit Ableton Live auf dem Rechner). Jedes Lied bekommt einen Ordner `<Lied>/<Lied>.als` mit `Samples/`:
+  jede Spur hat als Platzhalter einen Ableton-Sampler mit den Original-Wellen aus dem GM-SoundFont GeneralUser GS (nur die Zonen
+  der gespielten Tasten, mit Loops, Grundton, Feinstimmung, Anschlagsebenen und Hüllkurve; Schlagzeug als Sampler mit einer Zone
+  je Instrument). Der Sampler braucht Live Suite oder Standard. Bei DAWproject und REAPER weist man die Instrumente selbst zu –
+  der GM-Klang steht im Spurkommentar.
 - **Recherche:** Rechtsklick → Internetsuche, automatische Suche fehlender Angaben (MusicBrainz, Wikidata)
   und ein „Deep-Modus“, der über die Melodie verwandte Dateien findet.
+- **Lupe:** Rechtsklick auf eine Stelle ohne eigenes Menü (in der Tabelle: Zeilenmenü → „Lupe“) – eine Bildschirmlupe folgt der Maus,
+  2- bis 4-fach, drei Größen.
+- **Updates:** einmal am Tag eine Anfrage an GitHub; gibt es eine neue Version, erscheint oben ein grüner Knopf. Es wird nur diese
+  Anfrage gesendet; abschaltbar unter Einstellungen.
 - **Dateien verwalten:** kopieren, verschieben (Bewertung und Daten bleiben erhalten), in den Papierkorb legen;
   Titel und Interpret aus dem Dateinamen übernehmen.
 - **Oberfläche:** sechs Farbthemen, jeweils hell und dunkel; Sprache Deutsch/Englisch/Französisch (live umschaltbar);
@@ -90,7 +104,7 @@ funktionieren damit wie bei MIDI. Bearbeiten (in die Datei schreiben) geht bei M
 
 Die Leser wurden an echten Dateien geprüft (u. a. 853 Studio-One-Songs, 2 607 SMAF-Klingeltöne mit 774 MIDI-Gegenstücken,
 138 Cakewalk-, 212 XMI-, 14 HMP- und 573 Reason-Dateien); ABC, Humdrum, MUS, CMF, DAWproject und REAPER an eigenen
-Testdateien nach der jeweiligen Formatbeschreibung. DAWproject- und REAPER-Export werden per Rundlauf geprüft (alle Noten,
+Testdateien nach der jeweiligen Formatbeschreibung. DAWproject-, REAPER- und Ableton-Export werden per Rundlauf geprüft (alle Noten,
 Länge, Schlagzeug und Titel identisch).
 
 ## Bauen
@@ -103,8 +117,8 @@ Installer: `ISCC installer\MIDIARCHIV.iss` (Inno Setup 7) → `dist_installer\Mi
 
 ## Tests
 Alle Testprogramme mit der Umgebungsvariable `MIDIARCHIV_DB` auf eine **Kopie** der Datenbank richten.
-- `ArchivTest info|write <datei>`, `ArchivTest scan <db> <ordner>`, `ArchivTest groups <db>`, `ArchivTest lang`, `ArchivTest fileops <mid>`, `ArchivTest ultrastar`, `ArchivTest formats`, `ArchivTest projects`, `ArchivTest export <datei…>`, `ArchivTest batch <liste> <ergebnis>`
-- `UiShot shot <out.png> [breite höhe] [select n] [dupsonly] [light] [about] [keys] [clean]` – rendert die Oberfläche; `keys` prüft Tastatursteuerung und Rückgängig
+- `ArchivTest info|write <datei>`, `ArchivTest scan <db> <ordner>`, `ArchivTest groups <db>`, `ArchivTest lang`, `ArchivTest fileops <mid>`, `ArchivTest ultrastar`, `ArchivTest formats`, `ArchivTest projects`, `ArchivTest export <datei…>`, `ArchivTest update`, `ArchivTest batch <liste> <ergebnis>`
+- `UiShot shot <out.png> [breite höhe] [select n] [dupsonly] [light] [about] [keys] [suggest] [loupe x y] [clean]` – rendert die Oberfläche; `keys` prüft Tastatursteuerung und Rückgängig, `suggest` die Vorschläge (schreibt in Dateien – nur mit kopierten MIDIs)
 - `UiShot synctest`, `UiShot voicetest`, `UiShot carrytest` – Wiedergabe, DAW-Sync, hängende Stimmen
 - `HostTest <Midi-Fundus.vst3>` – lädt das VST3 wie eine DAW
 - `python Tools/check_lang.py` – prüft, dass jeder Text auf Englisch und Französisch vorliegt

@@ -442,6 +442,35 @@ MidiArchivEditor::MidiArchivEditor (MidiArchivProcessor& p)
     stopBtn.onClick = [this] { proc.stop(); };
     settingsBtn.onClick = [this] { showSettingsMenu(); };
     aboutBtn.onClick = [this] { showAbout (true); };
+    addChildComponent (updateBtn);
+    updateBtn.onClick = [this] { showUpdateMenu(); };
+    updateBtn.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff2f9e44));
+    updateBtn.setColour (juce::TextButton::textColourOffId, juce::Colours::white);
+    refreshUpdateHint();   // cached result of the last check (a new one arrives via the timer)
+
+    loupe = std::make_unique<ma::ui::Loupe>();
+    addChildComponent (*loupe);
+    catcher = std::make_unique<ma::ui::RightClickCatcher>();
+    catcher->onRightClick = [this] { showLoupeMenu(); };
+    catcher->passThrough = [this] (juce::Point<int> p) {
+        if (inPassThrough) return true;
+        if (about != nullptr || folderPick != nullptr || suggest != nullptr) return true;   // overlays
+        // table rows have their own menu (it contains "Lupe" too)
+        if (table.getBounds().contains (p))
+        {
+            auto& lb = table.list();
+            const auto lp = lb.getLocalPoint (this, p);
+            if (lp.y >= lb.getHeaderHeight() && lb.getRowContainingPosition (lp.x, lp.y) >= 0) return true;
+        }
+        // text fields keep their copy / paste menu
+        const juce::ScopedValueSetter<bool> guard (inPassThrough, true);
+        for (auto* c = getComponentAt (p); c != nullptr && c != this; c = c->getParentComponent())
+            if (dynamic_cast<juce::TextEditor*> (c) != nullptr) return true;
+        return false;
+    };
+    addAndMakeVisible (*catcher);
+    catcher->setBounds (getLocalBounds());   // the editor may already have its size (resized() ran before the catcher existed)
+    addMouseListener (&loupeTracker, true);
 
     table.onSelect = [this] (Entry* e) { updateDupPanel(); if (e != nullptr && ! e->has (fMissing)) proc.setCue (e->path); };
     proc.onHostTransport = [this] { setStatus (proc.isPlaying() ? T ("DAW: Play – spielt die markierte Datei ab DAW-Position") : T ("DAW: Stopp")); };
@@ -484,6 +513,7 @@ MidiArchivEditor::MidiArchivEditor (MidiArchivProcessor& p)
 MidiArchivEditor::~MidiArchivEditor()
 {
     proc.onHostTransport = nullptr;
+    removeMouseListener (&loupeTracker);
     pool.removeAllJobs (true, 15000);
     saveViewState();
     about.reset();
@@ -505,6 +535,8 @@ void MidiArchivEditor::applyLanguage()
     stopBtn.setTooltip (T ("Stopp"));
     settingsBtn.setTooltip (T ("Farbthema, Sprache, Klang, Dubletten-Schwelle, Datenbank"));
     aboutBtn.setTooltip (T ("Über Midi-Fundus und Tooltipps"));
+    shownUpdate = "-";   // texts in the new language
+    refreshUpdateHint();
     search.setTextToShowWhenEmpty (T ("Suche in allen Feldern …"), juce::Colours::grey);
     search.repaint();
     onlyDup.setTooltip (T ("Nur Dateien zeigen, die zu einer Dubletten-Gruppe gehören"));
@@ -566,6 +598,8 @@ void MidiArchivEditor::paint (juce::Graphics& g)
 
 void MidiArchivEditor::resized()
 {
+    if (catcher != nullptr) { catcher->setBounds (getLocalBounds()); catcher->toFront (false); }
+    if (loupe != nullptr) loupe->toFront (false);
     auto r = getLocalBounds();
     headerArea = r.removeFromTop (48);
     auto h = headerArea.reduced (10, 8);
@@ -575,6 +609,7 @@ void MidiArchivEditor::resized()
     scan.setBounds (h.removeFromLeft (92)); h.removeFromLeft (14);
     aboutBtn.setBounds (h.removeFromRight (32)); h.removeFromRight (6);
     settingsBtn.setBounds (h.removeFromRight (110)); h.removeFromRight (14);
+    if (updateBtn.isVisible()) { updateBtn.setBounds (h.removeFromRight (juce::jmin (190, h.getWidth() / 5))); h.removeFromRight (10); }
     stopBtn.setBounds (h.removeFromRight (32)); h.removeFromRight (4);
     playBtn.setBounds (h.removeFromRight (32)); h.removeFromRight (6);
     // toggles get their room first, then the player bar, the rest is the search field (min. 140 px)
@@ -631,6 +666,17 @@ bool MidiArchivEditor::keyPressed (const juce::KeyPress& k)
     if (k == juce::KeyPress::escapeKey) { if (folderPick) { closeFolderPick(); return true; } if (about) { showAbout (false); return true; } if (suggest) { closeSuggest(); return true; } proc.stop(); return true; }
     if (k == juce::KeyPress ('f', juce::ModifierKeys::ctrlModifier, 0)) { search.grabKeyboardFocus(); return true; }
     if (k == juce::KeyPress ('z', juce::ModifierKeys::ctrlModifier, 0)) { undo(); return true; }
+    // navigation keys nobody else took (focus on a button, the duplicate view, nowhere …): back to the table
+    const int code = k.getKeyCode();
+    const bool nav = code == juce::KeyPress::upKey || code == juce::KeyPress::downKey || code == juce::KeyPress::pageUpKey
+                  || code == juce::KeyPress::pageDownKey || code == juce::KeyPress::homeKey || code == juce::KeyPress::endKey;
+    if (! table.isEditing() && (nav || code == juce::KeyPress::leftKey || code == juce::KeyPress::rightKey
+                                || code == juce::KeyPress::F2Key || code == juce::KeyPress::returnKey))
+    {
+        table.list().grabKeyboardFocus();
+        if (nav && (table.keyPressed (k) || table.list().keyPressed (k))) return true;
+        if (code == juce::KeyPress::returnKey) { table.list().keyPressed (k); return true; }
+    }
     return table.keyPressed (k);
 }
 
@@ -690,7 +736,8 @@ void MidiArchivEditor::timerCallback()
         else if (arch->byId (pendingSelect) == nullptr) pendingSelect = 0;
         else { table.selectEntry (pendingSelect); if (table.selectedEntry() != nullptr && table.selectedEntry()->id == pendingSelect) pendingSelect = 0; }
     }
-    if (++viewTicks >= 20) { viewTicks = 0; saveViewState(); }   // every 2 s
+    if (++viewTicks >= 20) { viewTicks = 0; saveViewState(); refreshUpdateHint(); }   // every 2 s
+    if (loupe != nullptr && (loupe->isVisible() || (bool) proc.uiState.getProperty ("loupeOn", false))) updateLoupe();
     playBtn.setToggleState (proc.isPlaying(), juce::dontSendNotification);
     scan.setButtonText (arch->isScanning() ? T ("Stopp") : T ("Einlesen"));
     const auto now = juce::Time::getMillisecondCounter();
@@ -863,6 +910,114 @@ void MidiArchivEditor::showFolderMenu()
     });
 }
 
+// ============================================================================================ loupe
+void MidiArchivEditor::addLoupeMenu (juce::PopupMenu& m, int id0)
+{
+    auto& ui = proc.uiState;
+    const bool on = ui.getProperty ("loupeOn", false);
+    const int zoom = ui.getProperty ("loupeZoom", 250), size = ui.getProperty ("loupeSize", 1);
+    m.addItem (id0, on ? T ("Lupe ausschalten") : T ("Lupe einschalten"));
+    m.addSeparator();
+    m.addSectionHeader (T ("Vergrößerung"));
+    for (int i = 0; i < (int) std::size (ma::ui::LoupeSettings::kZooms); ++i)
+    {
+        const int z = ma::ui::LoupeSettings::kZooms[i];
+        auto txt = juce::String (z / 100.0, z % 100 == 0 ? 0 : 1);
+        if (language() != Lang::en) txt = txt.replaceCharacter ('.', ',');
+        m.addItem (id0 + 2 + i, txt + juce::String::fromUTF8 ("×"), true, zoom == z);
+    }
+    m.addSeparator();
+    m.addSectionHeader (T ("Lupengröße"));
+    const juce::String sizes[] = { T ("klein"), T ("mittel"), T ("groß") };
+    for (int i = 0; i < 3; ++i) m.addItem (id0 + 10 + i, sizes[i], true, size == i);
+}
+
+void MidiArchivEditor::handleLoupeMenu (int r, int id0)
+{
+    auto ui = proc.uiState;
+    if (r == id0) ui.setProperty ("loupeOn", ! (bool) ui.getProperty ("loupeOn", false), nullptr);
+    else if (r >= id0 + 2 && r < id0 + 2 + (int) std::size (ma::ui::LoupeSettings::kZooms))
+    { ui.setProperty ("loupeZoom", ma::ui::LoupeSettings::kZooms[r - id0 - 2], nullptr); ui.setProperty ("loupeOn", true, nullptr); }
+    else if (r >= id0 + 10 && r < id0 + 13) { ui.setProperty ("loupeSize", r - id0 - 10, nullptr); ui.setProperty ("loupeOn", true, nullptr); }
+    updateLoupe();
+}
+
+void MidiArchivEditor::showLoupeMenu()
+{
+    juce::PopupMenu m;
+    m.addSectionHeader (T ("Lupe"));
+    addLoupeMenu (m, 1);
+    m.showMenuAsync (juce::PopupMenu::Options().withMousePosition(), [safe = juce::Component::SafePointer<MidiArchivEditor> (this)] (int r) {
+        if (safe != nullptr && r != 0) safe->handleLoupeMenu (r, 1);
+    });
+}
+
+void MidiArchivEditor::showLoupeAt (juce::Point<int> p)
+{
+    proc.uiState.setProperty ("loupeOn", true, nullptr);
+    loupeTestPos = p;
+    updateLoupe();
+}
+
+void MidiArchivEditor::updateLoupe()
+{
+    if (loupe == nullptr) return;
+    auto& ui = proc.uiState;
+    const auto mouse = loupeTestPos.x >= 0 ? loupeTestPos : getMouseXYRelative();
+    if (! (bool) ui.getProperty ("loupeOn", false) || ! getLocalBounds().contains (mouse) || (loupeTestPos.x < 0 && ! isShowing()))
+    {
+        loupe->setVisible (false);
+        return;
+    }
+    const float zoom = (float) (int) ui.getProperty ("loupeZoom", 250) / 100.0f;
+    const auto size = ma::ui::LoupeSettings::windowSize ((int) ui.getProperty ("loupeSize", 1));
+    const int gap = 90;   // distance from the mouse pointer (user: 48 was too close)
+    const juce::Point<int> candidates[] = { { mouse.x + gap, mouse.y + gap }, { mouse.x - gap - size.x, mouse.y + gap },
+                                            { mouse.x + gap, mouse.y - gap - size.y }, { mouse.x - gap - size.x, mouse.y - gap - size.y } };
+    auto pos = candidates[0];
+    for (auto c : candidates)
+        if (getLocalBounds().contains (juce::Rectangle<int> (c.x, c.y, size.x, size.y))) { pos = c; break; }
+    const auto area = juce::Rectangle<float> ((float) size.x / zoom, (float) size.y / zoom).withCentre (mouse.toFloat()).getSmallestIntegerContainer();
+    float display = 1.0f;
+    if (auto* d = juce::Desktop::getInstance().getDisplays().getDisplayForRect (getScreenBounds())) display = (float) d->scale;
+    loupe->setVisible (false);
+    auto img = createComponentSnapshot (area, true, zoom * display);
+    loupe->setBounds (juce::jlimit (0, juce::jmax (0, getWidth() - size.x), pos.x),
+                      juce::jlimit (0, juce::jmax (0, getHeight() - size.y), pos.y), size.x, size.y);
+    loupe->frame = theme().accent;
+    loupe->setImage (img);
+    loupe->setVisible (true);
+    loupe->toFront (false);
+}
+
+void MidiArchivEditor::refreshUpdateHint()
+{
+    const auto v = updateCheck->newerVersion();
+    if (v == shownUpdate && updateBtn.isVisible() == v.isNotEmpty()) return;
+    shownUpdate = v;
+    updateBtn.setButtonText (T ("Update %1 verfügbar", v));
+    updateBtn.setTooltip (T ("Midi-Fundus %1 ist erschienen (installiert: %2) – klicken für den Download", v, MA_VERSION_STRING));
+    updateBtn.setVisible (v.isNotEmpty());
+    resized();
+}
+
+void MidiArchivEditor::showUpdateMenu()
+{
+    juce::PopupMenu m;
+    m.addSectionHeader (T ("Midi-Fundus %1 ist erschienen", shownUpdate));
+    m.addItem (1, T ("Download-Seite öffnen …"));
+    m.addItem (2, T ("Bis zum nächsten Start ausblenden"));
+    m.addSeparator();
+    m.addItem (3, T ("Nicht mehr nach Updates suchen"));
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (updateBtn), [safe = juce::Component::SafePointer<MidiArchivEditor> (this)] (int r) {
+        if (safe == nullptr || r == 0) return;
+        if (r == 1) juce::URL (ma::UpdateCheck::kReleasesUrl).launchInDefaultBrowser();
+        else if (r == 2) safe->updateCheck->dismiss();
+        else if (r == 3) safe->updateCheck->setEnabled (false);
+        safe->refreshUpdateHint();
+    });
+}
+
 void MidiArchivEditor::showSettingsMenu()
 {
     auto& st = arch->settings;
@@ -908,6 +1063,7 @@ void MidiArchivEditor::showSettingsMenu()
     m.addItem (20, T ("Alle Dateien neu einlesen (auch unveränderte)"), ! arch->isScanning());
     m.addItem (21, T ("Fehlende Dateien aus der Datenbank entfernen"));
     m.addItem (22, T ("Spaltenanordnung zurücksetzen"));
+    m.addItem (23, T ("Einmal am Tag nach Updates suchen (GitHub)"), true, updateCheck->enabled());
     m.addSeparator();
     m.addItem (30, T ("Datenbank-Ordner öffnen"));
     m.addItem (31, T ("Sicherungsordner (Originale vor Änderungen) öffnen"));
@@ -921,6 +1077,14 @@ void MidiArchivEditor::showSettingsMenu()
         else if (r == 10) safe->proc.setSoundMode (MidiArchivProcessor::sndKreisel);
         else if (r == 11) safe->proc.midiOut = ! safe->proc.midiOut.load();
         else if (r == 17) safe->proc.setHostSync (! safe->proc.hostSync());
+        else if (r == 23)
+        {
+            const bool on = ! safe->updateCheck->enabled();
+            safe->updateCheck->setEnabled (on);
+            safe->setStatus (on ? T ("Update-Suche an – gesendet wird nur die Anfrage an GitHub, keine Daten über dich oder dein Archiv")
+                                : T ("Update-Suche aus"));
+            safe->refreshUpdateHint();
+        }
         else if (r == 18) safe->proc.setHostTempo (! safe->proc.hostTempo());
         else if (r == 12) safe->proc.setSoundMode (MidiArchivProcessor::sndWindowsGm);
         else if (r == 13) safe->proc.setSoundMode (MidiArchivProcessor::sndSoundFont);
@@ -974,6 +1138,8 @@ void MidiArchivEditor::showCellMenu (Entry& e, int col, juce::Point<int>)
         convert.addSeparator();
         convert.addItem (63, T ("DAWproject (.dawproject) – Projekt mit Spuren, Tempo und Markern: Bitwig 5+, Studio One 6.5+ / Fender Studio Pro, Cubase 14+"), n > 0);
         convert.addItem (64, T ("REAPER-Projekt (.rpp) – eine MIDI-Spur je Instrument"), n > 0);
+        convert.addItem (65, ma::daw::abletonInstalled() ? T ("Ableton Live Set (.als) – Songordner mit MIDI-Spuren, Tempo, Taktart, Locators und den GM-Klängen als Sampler")
+                                                         : T ("Ableton Live Set (.als) – braucht ein installiertes Ableton Live"), n > 0 && ma::daw::abletonInstalled());
         files.addSubMenu (T ("Konvertieren nach"), convert, n > 0);
         files.addSeparator();
         files.addItem (40, n > 1 ? T ("%1 markierte Dateien löschen (Papierkorb) …", n) : T ("Datei löschen (Papierkorb) …"), n > 0);
@@ -1009,6 +1175,12 @@ void MidiArchivEditor::showCellMenu (Entry& e, int col, juce::Point<int>)
     if (text.isNotEmpty() && col != cProfile) m.addItem (32, T ("Als Suchfilter für „%1“", colName (col)));
     if (e.group != 0) m.addItem (34, T ("Alle Dubletten dieser Gruppe zeigen"));
     m.addItem (35, T ("Datei neu einlesen"));
+    {
+        juce::PopupMenu lp;
+        addLoupeMenu (lp, 900);
+        m.addSeparator();
+        m.addSubMenu (T ("Lupe"), lp);
+    }
     if (e.lyrics.isNotEmpty()) m.addItem (36, T ("Liedtext kopieren"));
     {
         int n = 0;
@@ -1022,12 +1194,13 @@ void MidiArchivEditor::showCellMenu (Entry& e, int col, juce::Point<int>)
         auto& a = *safe->arch;
         auto* en = a.byId (id);
         if (en == nullptr) return;
+        if (r >= 900 && r < 920) { safe->handleLoupeMenu (r, 900); return; }
         if (r == 1) safe->play (en);
         else if (r == 50) { safe->undo(); return; }
         else if (r == 2) juce::File (en->path).revealToUser();
         else if (r == 40) { safe->trashFiles (safe->targetsFor (*en)); return; }
         else if (r == 41 || r == 42) { safe->copyOrMoveFiles (safe->targetsFor (*en), r == 42); return; }
-        else if (r >= 60 && r <= 64) { safe->convertFiles (safe->targetsFor (*en), r - 60); return; }
+        else if (r >= 60 && r <= 65) { safe->convertFiles (safe->targetsFor (*en), r - 60); return; }
         else if (r >= 100 && r < 100 + kNumEngines) webSearchUrl (r - 100, query).launchInDefaultBrowser();
         else if (r == 120) webSearchUrl (0, en->composer + " " + T ("Komponist")).launchInDefaultBrowser();
         else if (r == 121) webSearchUrl (0, query + " " + T ("Erscheinungsjahr")).launchInDefaultBrowser();
@@ -1254,10 +1427,65 @@ void MidiArchivEditor::convertFiles (const std::vector<int>& ids, int format)
     std::vector<juce::String> paths;
     for (int id : ids) if (auto* e = arch->byId (id); e != nullptr && ! e->has (fMissing)) paths.push_back (e->path);
     if (paths.empty()) return;
-    const auto fmt = static_cast<ExportFormat> (juce::jlimit (0, 4, format));   // order of ExportFormat
-    chooser = std::make_unique<juce::FileChooser> (T ("Konvertierte Dateien speichern nach …"), juce::File (arch->settings.getProperty ("lastTarget").toString()));
+    const auto fmt = static_cast<ExportFormat> (juce::jlimit (0, 5, format));   // order of ExportFormat
+    const juce::File last (arch->settings.getProperty ("lastTarget").toString());
+
+    // what happens after writing: status line, new files of archive folders into the archive, errors
+    auto report = [safe = juce::Component::SafePointer<MidiArchivEditor> (this), fmt] (int ok, int added, const juce::String& where, const juce::String& failed)
+    {
+        if (safe == nullptr) return;
+        juce::String msg = T ("%1 Datei(en) als %2 gespeichert in %3", ok, exportFormatName (fmt), where);
+        if (added > 0) msg << T ("  (%1 neu im Archiv)", added);
+        safe->setStatus (msg);
+        if (failed.isNotEmpty())
+            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Midi-Fundus", T ("Nicht konvertiert:") + "\n" + failed.substring (0, 2000));
+        safe->refreshNow();
+    };
+
+    if (paths.size() == 1)
+    {
+        // one file: a real save dialog – the name is suggested and can be changed
+        const juce::File src (paths.front());
+        const auto suggested = (last.isDirectory() ? last : src.getParentDirectory()).getChildFile (suggestedExportName (src, fmt));
+        const auto ext = exportExtension (fmt);
+        chooser = std::make_unique<juce::FileChooser> (fmt == ExportFormat::ableton ? T ("Live Set speichern unter … (der Name wird zum Songordner)")
+                                                                                    : T ("Konvertierte Datei speichern unter …"),
+                                                       suggested, "*" + ext);
+        const int flags = juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles
+                        | (fmt == ExportFormat::ableton ? 0 : juce::FileBrowserComponent::warnAboutOverwriting);
+        chooser->launchAsync (flags, [safe = juce::Component::SafePointer<MidiArchivEditor> (this), src, fmt, ext, report] (const juce::FileChooser& fc) {
+            auto target = fc.getResult();
+            if (safe == nullptr || target == juce::File()) return;
+            target = target.withFileExtension (ext);
+            if (safe->arch->isProtected (target.getParentDirectory().getFullPathName()))
+            { juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Midi-Fundus", safe->arch->protectedMessage()); return; }
+            safe->arch->settings.setProperty ("lastTarget", target.getParentDirectory().getFullPathName(), nullptr);
+            auto run = [safe, src, fmt, target, report]
+            {
+                if (safe == nullptr) return;
+                juce::File written;
+                juce::String err;
+                const bool ok = exportFileAs (src, fmt, target, written, err);
+                const int added = ok && safe->arch->isInsideFolders (written) && safe->arch->addFile (written) != nullptr ? 1 : 0;
+                report (ok ? 1 : 0, added, ok ? written.getFullPathName() : target.getFullPathName(), ok ? juce::String() : src.getFileName() + ": " + err + "\n");
+            };
+            // Ableton writes <name>/<name>.als: the dialog cannot see that file, so ask here
+            const auto stem = juce::File::createLegalFileName (target.getFileNameWithoutExtension());
+            const auto dir = target.getParentDirectory().getFileName() == stem ? target.getParentDirectory() : target.getParentDirectory().getChildFile (stem);
+            if (fmt == ExportFormat::ableton && dir.getChildFile (stem + ".als").existsAsFile())
+                juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::QuestionIcon, T ("Live Set ersetzen?"),
+                    T ("„%1“ gibt es schon. Ersetzen? (Vorhandene Samples im Ordner bleiben und werden mitbenutzt.)", dir.getChildFile (stem + ".als").getFullPathName()),
+                    T ("Ersetzen"), T ("Abbrechen"), safe.getComponent(),
+                    juce::ModalCallbackFunction::create ([run] (int r) { if (r != 0) run(); }));
+            else run();
+        });
+        return;
+    }
+
+    // several files: a folder, each file gets its own name ("Artist - Title")
+    chooser = std::make_unique<juce::FileChooser> (T ("Konvertierte Dateien speichern nach …"), last);
     chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
-        [safe = juce::Component::SafePointer<MidiArchivEditor> (this), paths, fmt] (const juce::FileChooser& fc) {
+        [safe = juce::Component::SafePointer<MidiArchivEditor> (this), paths, fmt, report] (const juce::FileChooser& fc) {
             const auto dir = fc.getResult();
             if (safe == nullptr || ! dir.isDirectory()) return;
             if (safe->arch->isProtected (dir.getFullPathName()))
@@ -1276,12 +1504,7 @@ void MidiArchivEditor::convertFiles (const std::vector<int>& ids, int format)
                 }
                 else failed << juce::File (p).getFileName() << ": " << err << "\n";
             }
-            juce::String msg = T ("%1 Datei(en) als %2 gespeichert in %3", ok, exportFormatName (fmt), dir.getFullPathName());
-            if (added > 0) msg << T ("  (%1 neu im Archiv)", added);
-            safe->setStatus (msg);
-            if (failed.isNotEmpty())
-                juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Midi-Fundus", T ("Nicht konvertiert:") + "\n" + failed.substring (0, 2000));
-            safe->refreshNow();
+            report (ok, added, dir.getFullPathName(), failed);
         });
 }
 

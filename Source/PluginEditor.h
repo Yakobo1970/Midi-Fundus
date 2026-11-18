@@ -1,4 +1,6 @@
 #pragma once
+#include "UpdateCheck.h"
+#include "Loupe.h"
 #include "PluginProcessor.h"
 #include "Archive.h"
 #include "ArchiveTable.h"
@@ -134,9 +136,15 @@ public:
     std::vector<int> targetsFor (ma::Entry& clicked);              // all marked rows if the clicked one is marked
     void trashFiles (const std::vector<int>& allIds, std::function<void()> after = {});
     void copyOrMoveFiles (const std::vector<int>& ids, bool move);
-    void convertFiles (const std::vector<int>& ids, int format);   // ExportFormat: 0 MIDI, 1 MusicXML, 2 ABC, 3 DAWproject, 4 REAPER
+    void convertFiles (const std::vector<int>& ids, int format);   // ExportFormat order; one file = save dialog with a name, several = folder
     void refreshNow();
     juce::ThreadPool& jobs() { return pool; }
+    // mouse loupe (as in Spurwerk / x0x): right click anywhere without its own menu, or "Lupe" in the cell menu
+    void addLoupeMenu (juce::PopupMenu& m, int firstId);   // ids firstId .. firstId+19
+    void handleLoupeMenu (int r, int firstId);
+    void showLoupeMenu();
+    void updateLoupe();
+    void showLoupeAt (juce::Point<int> p);   // UiShot
 
 private:
     MidiArchivProcessor& proc;
@@ -157,6 +165,23 @@ private:
     std::unique_ptr<ma::ui::FolderPickPanel> folderPick;
     std::unique_ptr<ma::ui::SuggestPanel> suggest;
     std::unique_ptr<juce::FileChooser> chooser;
+    juce::SharedResourcePointer<ma::UpdateCheck> updateCheck;   // newest GitHub release, at most once a day
+    juce::TextButton updateBtn { "Update" };
+    juce::String shownUpdate;
+    std::unique_ptr<ma::ui::Loupe> loupe;
+    std::unique_ptr<ma::ui::RightClickCatcher> catcher;
+    struct LoupeTracker : juce::MouseListener
+    {
+        explicit LoupeTracker (MidiArchivEditor& e) : ed (e) {}
+        MidiArchivEditor& ed;
+        void mouseMove (const juce::MouseEvent&) override { ed.updateLoupe(); }
+        void mouseDrag (const juce::MouseEvent&) override { ed.updateLoupe(); }
+        void mouseExit (const juce::MouseEvent&) override { ed.updateLoupe(); }
+    } loupeTracker { *this };
+    juce::Point<int> loupeTestPos { -1, -1 };
+    bool inPassThrough = false;
+    void refreshUpdateHint();
+    void showUpdateMenu();
     juce::ThreadPool pool { 2 };
     juce::String statusText;
     juce::uint32 shownVersion = 0, lastRefresh = 0;

@@ -3,6 +3,7 @@
 #include "SmfBuilder.h"
 #include "Lang.h"
 #include <map>
+#include <set>
 
 namespace ma::fmt
 {
@@ -441,12 +442,71 @@ bool readAls (const juce::MemoryBlock& data, ConvertedSong& out, juce::String& e
     constexpr int ppq = 480;
     SmfBuilder b (ppq);
     double bpm = 120;
-    if (auto* tempo = findDeep (child (set, "MainTrack") != nullptr ? child (set, "MainTrack") : child (set, "MasterTrack"), "Tempo"))
+    auto* mainTrack = child (set, "MainTrack") != nullptr ? child (set, "MainTrack") : child (set, "MasterTrack");
+    // automation of the main track (tempo / metre changes): events at beat times, the one before 0 is the start value
+    auto automation = [&] (juce::XmlElement* param) {
+        std::vector<std::pair<double, double>> pts;
+        auto* target = child (param, "AutomationTarget");
+        if (target == nullptr) return pts;
+        const auto id = target->getStringAttribute ("Id");
+        if (auto* envs = findDeep (child (mainTrack, "AutomationEnvelopes"), "Envelopes"))
+            for (auto* env : envs->getChildIterator())
+                if (auto* pid = findDeep (env, "PointeeId"); pid != nullptr && pid->getStringAttribute ("Value") == id)
+                    if (auto* evs = findDeep (env, "Events"))
+                        for (auto* ev : evs->getChildIterator())
+                            pts.push_back ({ juce::jmax (0.0, ev->getDoubleAttribute ("Time")), ev->getDoubleAttribute ("Value") });
+        return pts;
+    };
+    auto* mixer = findDeep (mainTrack, "Mixer");
+    if (auto* tempo = child (mixer, "Tempo") != nullptr ? child (mixer, "Tempo") : findDeep (mainTrack, "Tempo"))
+    {
         bpm = valueOf (tempo, "Manual", 120);
-    b.tempo (0, bpm);
-    if (auto* ts = findDeep (set, "RemoteableTimeSignature"))
-        b.timeSig (0, (int) valueOf (ts, "Numerator", 4), (int) valueOf (ts, "Denominator", 4));
+        b.tempo (0, bpm);
+        double last = bpm;
+        for (auto& [beat, v] : automation (tempo))   // breakpoints as steps (a ramp is rare in MIDI-like sets)
+            if (v >= 5 && std::abs (v - last) > 1e-6) { b.tempo ((juce::int64) std::llround (beat * ppq), v); last = v; }
+    }
+    else b.tempo (0, bpm);
+    bool metreDone = false;
+    if (auto* sig = child (mixer, "TimeSignature"))
+    {
+        // Live's metre code: (numerator - 1) + 99 * log2 (denominator), 201 = 4/4
+        auto put = [&] (double beat, int code) {
+            if (code < 0 || code > 99 * 7) return;
+            b.timeSig ((juce::int64) std::llround (beat * ppq), code % 99 + 1, 1 << (code / 99));
+            metreDone = true;
+        };
+        int last = -1;
+        auto pts = automation (sig);
+        if (pts.empty()) pts.push_back ({ 0.0, valueOf (sig, "Manual", 201) });
+        for (auto& [beat, v] : pts)
+            if ((int) v != last) { put (beat, (int) v); last = (int) v; }
+    }
+    if (! metreDone)
+        if (auto* ts = findDeep (set, "RemoteableTimeSignature"))
+            b.timeSig (0, (int) valueOf (ts, "Numerator", 4), (int) valueOf (ts, "Denominator", 4));
+    if (auto* locs = child (child (set, "Locators"), "Locators"))
+        for (auto* l : locs->getChildWithTagNameIterator ("Locator"))
+            if (auto* nm = child (l, "Name"); nm != nullptr && nm->getStringAttribute ("Value").isNotEmpty())
+                b.meta (0, (juce::int64) std::llround (valueOf (l, "Time") * ppq), 0x06, nm->getStringAttribute ("Value"));
 
+    // "Drums: 2,5" in the set's info text (Midi-Fundus): exactly these tracks are drums
+    std::set<int> drumList;
+    bool hasDrumList = false;
+    if (auto* ann = child (set, "Annotation"))
+    {
+        juce::StringArray lines;
+        lines.addLines (ann->getStringAttribute ("Value"));
+        for (auto& l : lines)
+            if (l.startsWithIgnoreCase ("Drums:"))
+            {
+                hasDrumList = true;
+                juce::StringArray n;
+                n.addTokens (l.fromFirstOccurrenceOf (":", false, false), ",", {});
+                for (auto& x : n) drumList.insert (x.trim().getIntValue());
+            }
+    }
+    int trackNo = 0;
     struct TrackClips { juce::String name; bool drums; juce::Array<juce::XmlElement*> arrangement; std::vector<std::pair<int, juce::XmlElement*>> session; };
     std::vector<TrackClips> list;
     bool anyArrangement = false;
@@ -459,6 +519,14 @@ bool readAls (const juce::MemoryBlock& data, ConvertedSong& out, juce::String& e
             if (tc.name.isEmpty() && child (nm, "EffectiveName") != nullptr) tc.name = child (nm, "EffectiveName")->getStringAttribute ("Value");
         }
         tc.drums = findDeep (tr, "DrumGroupDevice") != nullptr;
+        ++trackNo;
+        if (hasDrumList) tc.drums = drumList.count (trackNo) > 0;
+        else if (! tc.drums && findDeep (tr, "Devices") != nullptr && findDeep (tr, "Devices")->getNumChildElements() == 0)
+        {
+            // no instrument (sets written by Midi-Fundus and other converters): the track name decides
+            const auto l = tc.name.toLowerCase();
+            for (auto* k : { "drum", "schlagzeug", "batterie", "percussion" }) tc.drums |= l.contains (k);
+        }
         auto* seq = findDeep (tr, "MainSequencer");
         collectDeep (findDeep (child (seq, "ClipTimeable"), "Events"), "MidiClip", tc.arrangement);
         if (auto* slots = child (seq, "ClipSlotList"))
@@ -515,6 +583,21 @@ bool readAls (const juce::MemoryBlock& data, ConvertedSong& out, juce::String& e
     out.format = "Ableton";
     out.smf = b.build();
     out.comment = root->getStringAttribute ("Creator");
+    // the set's info text: "Title: …" / "Artist: …" lines (written by Midi-Fundus), the rest goes to the comment
+    if (auto* ann = child (set, "Annotation"))
+    {
+        juce::StringArray lines, rest;
+        lines.addLines (ann->getStringAttribute ("Value"));
+        for (auto& l : lines)
+        {
+            if (l.startsWithIgnoreCase ("Title:")) out.title = l.fromFirstOccurrenceOf (":", false, false).trim();
+            else if (l.startsWithIgnoreCase ("Artist:")) out.artist = l.fromFirstOccurrenceOf (":", false, false).trim();
+            else if (l.startsWithIgnoreCase ("Composer:")) out.composer = l.fromFirstOccurrenceOf (":", false, false).trim();
+            else if (l.startsWithIgnoreCase ("Drums:")) continue;
+            else if (l.trim().isNotEmpty()) rest.add (l.trim());
+        }
+        if (rest.size() > 0) out.comment = rest.joinIntoString (" ");
+    }
     return true;
 }
 // ============================================================================================ Studio One / Fender Studio Pro SONG
